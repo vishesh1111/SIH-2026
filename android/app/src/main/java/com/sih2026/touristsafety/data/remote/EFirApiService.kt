@@ -1,0 +1,28 @@
+package com.sih2026.touristsafety.data.remote
+
+import okhttp3.ResponseBody
+import retrofit2.Response
+import retrofit2.http.Body
+import retrofit2.http.POST
+
+data class FirRequest(val description: String, val language: String)
+
+data class StructuredFir(
+    val incidentType: String,
+    val bnsSections: List<String>,
+    val dateTime: String,
+    val place: String,
+    val accusedDescription: String,
+    val propertyLost: String,
+    val witnesses: String,
+    val narrative: String,
+    val complainantDetails: String
+)
+
+interface EFirApiService {
+    @POST("efir/generate")
+    suspend fun generateFir(@Body request: FirRequest): Response<StructuredFir>
+
+    @POST("efir/pdf")
+    suspend fun downloadPdf(@Body fir: StructuredFir): Response<ResponseBody>
+}
