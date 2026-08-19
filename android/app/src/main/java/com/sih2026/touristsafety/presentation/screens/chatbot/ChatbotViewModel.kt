@@ -3,8 +3,9 @@ package com.sih2026.touristsafety.presentation.screens.chatbot
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sih2026.touristsafety.data.remote.ActionButton
+import com.sih2026.touristsafety.data.remote.ChatApiService
+import com.sih2026.touristsafety.data.remote.ChatRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,8 +24,7 @@ data class ChatMessage(
 
 @HiltViewModel
 class ChatbotViewModel @Inject constructor(
-    // private val chatApiService: ChatApiService,
-    // private val chatDao: ChatMessageDao
+    private val chatApiService: ChatApiService
 ) : ViewModel() {
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
@@ -74,19 +74,43 @@ class ChatbotViewModel @Inject constructor(
         _isTyping.value = true
 
         viewModelScope.launch {
-            // Simulate API call
-            delay(1500)
-            val assistantResponse = ChatMessage(
-                id = UUID.randomUUID().toString(),
-                role = "assistant",
-                content = "I can definitely help you with that. It looks like you're asking about $text.",
-                actionButtons = listOf(
-                    ActionButton("More Info", "info_action"),
-                    ActionButton("Contact Support", "support_action")
+            try {
+                val response = chatApiService.sendMessage(
+                    ChatRequest(
+                        message = text,
+                        location = "Unknown", // You can update this to get actual location
+                        language = "en"
+                    )
                 )
-            )
-            _messages.value = _messages.value + assistantResponse
-            _isTyping.value = false
+
+                if (response.isSuccessful && response.body() != null) {
+                    val body = response.body()!!
+                    val assistantResponse = ChatMessage(
+                        id = UUID.randomUUID().toString(),
+                        role = "assistant",
+                        content = body.text,
+                        actionButtons = body.action_buttons,
+                        imageUrls = body.image_urls
+                    )
+                    _messages.value = _messages.value + assistantResponse
+                } else {
+                    val errorMsg = ChatMessage(
+                        id = UUID.randomUUID().toString(),
+                        role = "assistant",
+                        content = "Sorry, I'm having trouble connecting right now."
+                    )
+                    _messages.value = _messages.value + errorMsg
+                }
+            } catch (e: Exception) {
+                val errorMsg = ChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    role = "assistant",
+                    content = "Error: ${e.message}"
+                )
+                _messages.value = _messages.value + errorMsg
+            } finally {
+                _isTyping.value = false
+            }
         }
     }
 }

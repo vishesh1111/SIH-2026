@@ -1,6 +1,7 @@
 package com.sih2026.touristsafety.presentation.screens.chatbot
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,10 +17,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sih2026.touristsafety.data.remote.ActionButton
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+
+import androidx.compose.ui.platform.LocalContext
+import com.google.android.gms.location.LocationServices
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,6 +35,29 @@ fun ChatbotScreen(
     val messages by viewModel.messages.collectAsState()
     val isTyping by viewModel.isTyping.collectAsState()
     val inputText by viewModel.inputText.collectAsState()
+
+    val context = LocalContext.current
+    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            try {
+                fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                    if (location != null) {
+                        viewModel.sendMessage("Here are my exact GPS coordinates: Latitude ${location.latitude}, Longitude ${location.longitude}. What are the nearby attractions?")
+                    } else {
+                        viewModel.sendMessage("I couldn't pinpoint my exact GPS location right now, but I'm looking for attractions nearby.")
+                    }
+                }
+            } catch (e: SecurityException) {
+                viewModel.sendMessage("Location access was denied.")
+            }
+        } else {
+            viewModel.sendMessage("Location access was denied.")
+        }
+    }
 
     val suggestions = listOf("Nearby attractions", "Safety tips", "Emergency help", "Local customs")
 
@@ -55,7 +84,17 @@ fun ChatbotScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 items(messages) { message ->
-                    MessageBubble(message)
+                    MessageBubble(
+                        message = message,
+                        onActionClick = { button ->
+                            val label = button.label.lowercase()
+                            if (label.contains("location") || label.contains("gps")) {
+                                locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                            } else {
+                                viewModel.sendMessage(button.label)
+                            }
+                        }
+                    )
                 }
                 
                 if (isTyping) {
@@ -122,7 +161,10 @@ fun ChatbotScreen(
 }
 
 @Composable
-fun MessageBubble(message: ChatMessage) {
+fun MessageBubble(
+    message: ChatMessage,
+    onActionClick: (ActionButton) -> Unit = {}
+) {
     val isUser = message.role == "user"
     
     Row(
@@ -156,7 +198,7 @@ fun MessageBubble(message: ChatMessage) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(buttons) { button ->
-                        OutlinedButton(onClick = { /* Handle action */ }) {
+                        OutlinedButton(onClick = { onActionClick(button) }) {
                             Text(button.label)
                         }
                     }
@@ -168,14 +210,46 @@ fun MessageBubble(message: ChatMessage) {
 
 @Composable
 fun TypingIndicator() {
+    val infiniteTransition = rememberInfiniteTransition(label = "typing")
+    
+    val dot1Offset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = -10f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(300, delayMillis = 0, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dot1"
+    )
+    
+    val dot2Offset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = -10f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(300, delayMillis = 150, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dot2"
+    )
+    
+    val dot3Offset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = -10f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(300, delayMillis = 300, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dot3"
+    )
+
     Row(
         modifier = Modifier
             .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(16.dp))
-            .padding(16.dp),
+            .padding(horizontal = 16.dp, vertical = 20.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSecondaryContainer))
-        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSecondaryContainer))
-        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSecondaryContainer))
+        Box(modifier = Modifier.offset(y = dot1Offset.dp).size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSecondaryContainer))
+        Box(modifier = Modifier.offset(y = dot2Offset.dp).size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSecondaryContainer))
+        Box(modifier = Modifier.offset(y = dot3Offset.dp).size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSecondaryContainer))
     }
 }

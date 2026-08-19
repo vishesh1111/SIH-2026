@@ -1,0 +1,16 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    
+    <!-- Light blue halo (semi-transparent) -->
+    <path android:fillColor="#401976D2" 
+          android:pathData="M12,2a10,10 0,1,0 0,20a10,10 0,1,0 0,-20z" />
+          
+    <!-- White border -->
+    <path android:fillColor="#FFFFFF" 
+          android:pathData="M12,5.5a6.5,6.5 0,1,0 0,13a6.5,6.5 0,1,0 0,-13z" />
+          
+    <!-- Solid blue dot -->
+    <path android:fillColor="#1976D2" 
+          android:pathData="M12,7a5,5 0,1,0 0,10a5,5 0,1,0 0,-10z" />
+</vector>

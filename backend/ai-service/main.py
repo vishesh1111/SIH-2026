@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import google.generativeai as genai
 
-from routers import chatbot, efir, incidents, translator
+from routers import chatbot, efir, incidents, translator, places
 
 load_dotenv()
 
@@ -33,6 +33,7 @@ app.include_router(chatbot.router, prefix="/api/chat", tags=["Chatbot"])
 app.include_router(efir.router, prefix="/api/efir", tags=["e-FIR"])
 app.include_router(incidents.router, prefix="/api/incidents", tags=["Incidents"])
 app.include_router(translator.router, prefix="/api/translate", tags=["Translator"])
+app.include_router(places.router, prefix="/api/places", tags=["Places"])
 
 @app.get("/health")
 async def health_check():

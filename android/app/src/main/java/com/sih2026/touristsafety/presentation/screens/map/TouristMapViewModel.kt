@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.maps.model.LatLng
 import com.sih2026.touristsafety.data.local.entities.GeofenceZoneEntity
+import com.sih2026.touristsafety.data.remote.PlacesApiService
 import com.sih2026.touristsafety.domain.model.NearbyPlace
 import com.sih2026.touristsafety.domain.model.TouristLocation
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -14,7 +15,9 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class TouristMapViewModel @Inject constructor() : ViewModel() {
+class TouristMapViewModel @Inject constructor(
+    private val placesApi: PlacesApiService
+) : ViewModel() {
 
     private val _userLocation = MutableStateFlow<LatLng?>(LatLng(28.6139, 77.2090)) // Default to Delhi
     val userLocation: StateFlow<LatLng?> = _userLocation.asStateFlow()
@@ -49,12 +52,15 @@ class TouristMapViewModel @Inject constructor() : ViewModel() {
     }
 
     fun loadNearbyPlaces() {
-        // Mock data
-        _nearbyPlaces.value = listOf(
-            NearbyPlace("1", "India Gate", "monument", 28.6129, 77.2295, 1.2, 4.8f),
-            NearbyPlace("2", "City Hospital", "hospital", 28.6145, 77.2085, 0.5, 4.2f),
-            NearbyPlace("3", "Central Police Station", "police", 28.6200, 77.2100, 0.8, 4.0f)
-        )
+        viewModelScope.launch {
+            try {
+                val loc = _userLocation.value ?: LatLng(28.6139, 77.2090)
+                val places = placesApi.getNearbyPlaces(loc.latitude, loc.longitude)
+                _nearbyPlaces.value = places
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     fun loadDangerZones() {
@@ -82,6 +88,11 @@ class TouristMapViewModel @Inject constructor() : ViewModel() {
             TouristLocation("1", "John Doe", 28.6140, 77.2100, "USA"),
             TouristLocation("2", "Jane Smith", 28.6130, 77.2080, "UK")
         )
+    }
+
+    fun updateUserLocation(latLng: LatLng) {
+        _userLocation.value = latLng
+        loadNearbyPlaces()
     }
 
     fun connectWithTourist(touristId: String) {

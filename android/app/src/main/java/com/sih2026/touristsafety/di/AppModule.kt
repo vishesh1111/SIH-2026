@@ -24,6 +24,8 @@ import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import javax.inject.Singleton
 
+import java.util.concurrent.TimeUnit
+
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
 @Module
@@ -57,6 +59,9 @@ object AppModule {
         }
         return OkHttpClient.Builder()
             .addInterceptor(logging)
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
             .build()
     }
 
@@ -64,10 +69,22 @@ object AppModule {
     @Singleton
     fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
-            .baseUrl("https://api.placeholder.com/") // Update with actual URL
+            .baseUrl("http://192.168.1.41:8000/") // Local network IP for real devices
             .client(okHttpClient)
             .addConverterFactory(MoshiConverterFactory.create())
             .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideChatApiService(retrofit: Retrofit): com.sih2026.touristsafety.data.remote.ChatApiService {
+        return retrofit.create(com.sih2026.touristsafety.data.remote.ChatApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun providePlacesApiService(retrofit: Retrofit): com.sih2026.touristsafety.data.remote.PlacesApiService {
+        return retrofit.create(com.sih2026.touristsafety.data.remote.PlacesApiService::class.java)
     }
 
     @Provides

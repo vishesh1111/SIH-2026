@@ -1,8 +1,15 @@
 package com.sih2026.touristsafety.presentation.screens.incidents
 
+import android.Manifest
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,9 +33,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -121,16 +133,33 @@ fun Step1CaptureEvidence(
     onPhotoRemoved: (Int) -> Unit,
     onNext: () -> Unit
 ) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
         onResult = { uri -> uri?.let { onPhotoAdded(it) } }
     )
 
+    var hasCameraPermission by remember { mutableStateOf(false) }
+    val imageCapture = remember { ImageCapture.Builder().build() }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasCameraPermission = granted
+    }
+
+    // Request camera permission on first composition
+    LaunchedEffect(Unit) {
+        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+    }
+
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Mock Camera Preview
+        // Real Camera Preview
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -139,8 +168,43 @@ fun Step1CaptureEvidence(
                 .background(Color.Black),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.White, modifier = Modifier.size(64.dp))
-            Text("Camera Preview", color = Color.White, modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp))
+            if (hasCameraPermission) {
+                AndroidView(
+                    factory = { ctx ->
+                        val previewView = PreviewView(ctx)
+                        val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
+                        cameraProviderFuture.addListener({
+                            val cameraProvider = cameraProviderFuture.get()
+                            val preview = Preview.Builder().build().also {
+                                it.setSurfaceProvider(previewView.surfaceProvider)
+                            }
+                            try {
+                                cameraProvider.unbindAll()
+                                cameraProvider.bindToLifecycle(
+                                    lifecycleOwner,
+                                    CameraSelector.DEFAULT_BACK_CAMERA,
+                                    preview,
+                                    imageCapture
+                                )
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }, ContextCompat.getMainExecutor(ctx))
+                        previewView
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.White, modifier = Modifier.size(64.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Camera permission required", color = Color.White)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }) {
+                        Text("Grant Permission")
+                    }
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -155,8 +219,24 @@ fun Step1CaptureEvidence(
                 Text("Gallery")
             }
             Button(
-                onClick = { onPhotoAdded(Uri.parse("mock_uri_${System.currentTimeMillis()}")) },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                onClick = {
+                    val photoFile = File.createTempFile("incident_", ".jpg", context.cacheDir)
+                    val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
+                    imageCapture.takePicture(
+                        outputOptions,
+                        ContextCompat.getMainExecutor(context),
+                        object : ImageCapture.OnImageSavedCallback {
+                            override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                                onPhotoAdded(Uri.fromFile(photoFile))
+                            }
+                            override fun onError(e: ImageCaptureException) {
+                                e.printStackTrace()
+                            }
+                        }
+                    )
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                enabled = hasCameraPermission
             ) {
                 Icon(Icons.Default.Camera, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
@@ -178,7 +258,6 @@ fun Step1CaptureEvidence(
                             .clip(RoundedCornerShape(8.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
-                        // In a real app, use Coil AsyncImage
                         Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.align(Alignment.Center))
                         IconButton(
                             onClick = { onPhotoRemoved(index) },

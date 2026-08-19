@@ -1,32 +1,51 @@
 import google.generativeai as genai
 import json
+import re
 from typing import Optional
 
-SYSTEM_PROMPT = """You are an expert Indian tourism assistant and safety advisor.
-You help tourists with queries about monuments, local customs, safety tips, and general navigation in India.
-Your responses should be helpful, culturally aware, and prioritize safety.
-Return JSON ONLY, following this format:
-{
-  "text": "Your detailed text response",
-  "image_urls": ["optional_url1", "optional_url2"],
-  "action_buttons": [
-    {"label": "button text", "action": "action_url_or_intent"}
-  ]
-}
-"""
+SYSTEM_PROMPT = """You are a concise Indian tourism and safety assistant. Help tourists with monuments, customs, safety, and navigation in India. Be brief and helpful.
+Reply in JSON: {"text": "your response", "action_buttons": [{"label": "btn", "action": "act"}]}
+Keep text under 150 words. Max 2 action buttons. No image_urls needed."""
+
+def extract_json(text: str) -> dict:
+    """Extract JSON from Gemini response, handling markdown code blocks."""
+    # Try to find JSON in ```json ... ``` blocks
+    match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
+    if match:
+        return json.loads(match.group(1), strict=False)
+    # Try to find raw JSON object
+    match = re.search(r'\{.*\}', text, re.DOTALL)
+    if match:
+        return json.loads(match.group(0), strict=False)
+    raise json.JSONDecodeError("No JSON found", text, 0)
 
 class GeminiService:
     def __init__(self):
-        self.model = genai.GenerativeModel('gemini-2.0-flash')
-        self.vision_model = genai.GenerativeModel('gemini-2.0-flash')
+        # Using gemini-3.5-flash for better stability and quota
+        self.model = genai.GenerativeModel(
+            'gemini-3.5-flash',
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.7,
+                response_mime_type="application/json"
+            )
+        )
+        self.vision_model = genai.GenerativeModel('gemini-3.5-flash')
         
     async def chat(self, message: str, location: Optional[str], language: str):
-        prompt = f"System: {SYSTEM_PROMPT}\nUser Location: {location}\nLanguage: {language}\nUser Message: {message}"
+        prompt = f"System: {SYSTEM_PROMPT}\nLocation: {location}\nLang: {language}\nUser: {message}"
         response = self.model.generate_content(prompt)
         try:
-            return json.loads(response.text.strip('```json\n').strip('```'))
-        except json.JSONDecodeError:
-            return {"text": response.text, "image_urls": [], "action_buttons": []}
+            parsed = extract_json(response.text)
+            if 'image_urls' not in parsed:
+                parsed['image_urls'] = []
+            if 'action_buttons' not in parsed:
+                parsed['action_buttons'] = []
+            return parsed
+        except Exception as e:
+            # If parsing fails, we return a clean text response instead of dumping the raw broken JSON.
+            # We strip any JSON-like artifacts from the raw text for a better user experience.
+            clean_text = response.text.replace('{"text":', '').replace('}', '').replace('"', '').strip()
+            return {"text": clean_text, "image_urls": [], "action_buttons": []}
 
     async def structure_fir(self, description: str):
         prompt = f"""Analyze this incident description and output a structured JSON for an e-FIR.

@@ -1,5 +1,7 @@
 package com.sih2026.touristsafety.domain.model
 
+import com.squareup.moshi.JsonClass
+
 data class TouristLocation(
     val id: String,
     val name: String,
@@ -8,6 +10,7 @@ data class TouristLocation(
     val nationality: String
 )
 
+@JsonClass(generateAdapter = true)
 data class NearbyPlace(
     val id: String,
     val name: String,
@@ -17,5 +20,4 @@ data class NearbyPlace(
     val distance: Double,
     val rating: Float
 )
-
 
