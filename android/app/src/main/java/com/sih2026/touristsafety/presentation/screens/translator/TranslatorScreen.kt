@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -107,7 +108,8 @@ fun TranslatorScreen(
                     .padding(vertical = 8.dp),
                 horizontalArrangement = Arrangement.Start
             ) {
-                IconButton(onClick = { /* Voice input */ }) {
+                val context = LocalContext.current
+                IconButton(onClick = { android.widget.Toast.makeText(context, "Voice input coming soon", android.widget.Toast.LENGTH_SHORT).show() }) {
                     Icon(Icons.Default.Mic, "Speak")
                 }
                 IconButton(onClick = { viewModel.speakText(inputText, sourceLang.code) }) {

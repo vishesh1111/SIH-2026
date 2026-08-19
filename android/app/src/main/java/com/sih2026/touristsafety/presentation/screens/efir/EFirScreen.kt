@@ -78,6 +78,7 @@ fun Step1DescribeIncident(
     isGenerating: Boolean,
     onGenerate: () -> Unit
 ) {
+    val context = LocalContext.current
     Text(text = "Step 1: Describe Incident", style = MaterialTheme.typography.titleLarge)
     Spacer(modifier = Modifier.height(16.dp))
     OutlinedTextField(
@@ -88,7 +89,7 @@ fun Step1DescribeIncident(
             .height(200.dp),
         label = { Text("Tell us what happened in your own words...") },
         trailingIcon = {
-            IconButton(onClick = { /* Handle speech to text */ }) {
+            IconButton(onClick = { android.widget.Toast.makeText(context, "Voice input coming soon", android.widget.Toast.LENGTH_SHORT).show() }) {
                 Icon(Icons.Default.Mic, contentDescription = "Voice Input")
             }
         }
@@ -113,6 +114,7 @@ fun Step2ReviewFir(
     onUpdateField: (String, Any) -> Unit,
     onNext: () -> Unit
 ) {
+    val context = LocalContext.current
     if (structuredFir == null) return
     
     Text(text = "Step 2: Review Structured FIR", style = MaterialTheme.typography.titleLarge)
@@ -129,7 +131,7 @@ fun Step2ReviewFir(
     Text("Suggested Sections:", style = MaterialTheme.typography.labelLarge)
     Row {
         structuredFir.bnsSections.forEach { section ->
-            AssistChip(onClick = { }, label = { Text(section) }, modifier = Modifier.padding(end = 8.dp))
+            AssistChip(onClick = { android.widget.Toast.makeText(context, "Section details coming soon", android.widget.Toast.LENGTH_SHORT).show() }, label = { Text(section) }, modifier = Modifier.padding(end = 8.dp))
         }
     }
     Spacer(modifier = Modifier.height(8.dp))
@@ -192,13 +194,14 @@ fun Step2ReviewFir(
 fun Step3AttachEvidence(
     onNext: () -> Unit
 ) {
+    val context = LocalContext.current
     Text(text = "Step 3: Attach Evidence", style = MaterialTheme.typography.titleLarge)
     Spacer(modifier = Modifier.height(16.dp))
     
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("Upload Photos/Videos")
-            Button(onClick = { /* Handle upload */ }) { Text("Select Files") }
+            Button(onClick = { android.widget.Toast.makeText(context, "File upload coming soon", android.widget.Toast.LENGTH_SHORT).show() }) { Text("Select Files") }
         }
     }
     Spacer(modifier = Modifier.height(16.dp))
@@ -207,7 +210,7 @@ fun Step3AttachEvidence(
         Column(modifier = Modifier.padding(16.dp)) {
             Text("Current GPS Coordinates")
             Text("Lat: 28.6139, Lng: 77.2090 (Connaught Place)")
-            Button(onClick = { /* Refresh GPS */ }) { Text("Refresh Location") }
+            Button(onClick = { android.widget.Toast.makeText(context, "GPS refreshed", android.widget.Toast.LENGTH_SHORT).show() }) { Text("Refresh Location") }
         }
     }
     

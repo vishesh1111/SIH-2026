@@ -19,7 +19,7 @@ class TouristMapViewModel @Inject constructor(
     private val placesApi: PlacesApiService
 ) : ViewModel() {
 
-    private val _userLocation = MutableStateFlow<LatLng?>(LatLng(28.6139, 77.2090)) // Default to Delhi
+    private val _userLocation = MutableStateFlow<LatLng?>(null) // Will be set to real GPS location
     val userLocation: StateFlow<LatLng?> = _userLocation.asStateFlow()
 
     private val _nearbyTourists = MutableStateFlow<List<TouristLocation>>(emptyList())

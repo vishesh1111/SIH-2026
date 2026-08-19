@@ -28,6 +28,8 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polygon
 
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+
 @Composable
 fun OsmMapView(
     modifier: Modifier = Modifier,
@@ -35,22 +37,20 @@ fun OsmMapView(
     nearbyPlaces: List<NearbyPlace>,
     dangerZones: List<GeofenceZoneEntity>,
     nearbyTourists: List<TouristLocation>,
-    isShowingTourists: Boolean
+    isShowingTourists: Boolean,
+    onRecenterRequested: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    
-    // Initialize OSM configuration
-    remember {
-        Configuration.getInstance().userAgentValue = context.packageName
-        Configuration.getInstance().load(context, context.getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
-        true
-    }
 
     val mapView = remember {
         MapView(context).apply {
+            setTileSource(TileSourceFactory.MAPNIK)
             setMultiTouchControls(true)
             maxZoomLevel = 22.0
             minZoomLevel = 3.0
+            controller.setZoom(15.0)
+            // Default center (Delhi) until GPS is available
+            controller.setCenter(GeoPoint(28.6139, 77.2090))
         }
     }
     
@@ -138,6 +138,8 @@ fun OsmMapView(
         
         FloatingActionButton(
             onClick = {
+                // Re-fetch GPS location from parent, then animate
+                onRecenterRequested()
                 userLocation?.let {
                     val point = GeoPoint(it.latitude, it.longitude)
                     mapView.controller.setZoom(18.0)

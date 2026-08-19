@@ -21,6 +21,8 @@ sealed class SOSState {
         val smsSent: Boolean,
         val locationShared: Boolean,
         val audioRecording: Boolean,
+        val bleAdvertising: Boolean = false,
+        val physicalSignaling: Boolean = false,
         val latitude: Double? = null,
         val longitude: Double? = null
     ) : SOSState()
@@ -43,16 +45,20 @@ class SOSViewModel @Inject constructor(
             timestamp = timestamp,
             smsSent = false,
             locationShared = false,
-            audioRecording = false
+            audioRecording = false,
+            bleAdvertising = false,
+            physicalSignaling = false
         )
 
         viewModelScope.launch {
-            sosManager.activateSOS { smsSent, locationShared, audioRecording, lat, lon ->
+            sosManager.activateSOS { smsSent, locationShared, audioRecording, bleAdvertising, physicalSignaling, lat, lon ->
                 _sosState.value = SOSState.Active(
                     timestamp = timestamp,
                     smsSent = smsSent,
                     locationShared = locationShared,
                     audioRecording = audioRecording,
+                    bleAdvertising = bleAdvertising,
+                    physicalSignaling = physicalSignaling,
                     latitude = lat,
                     longitude = lon
                 )

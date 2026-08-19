@@ -132,7 +132,26 @@ fun TouristMapScreen(
                 nearbyPlaces = nearbyPlaces,
                 dangerZones = dangerZones,
                 nearbyTourists = nearbyTourists,
-                isShowingTourists = isShowingTourists
+                isShowingTourists = isShowingTourists,
+                onRecenterRequested = {
+                    // Re-fetch fresh GPS location when FAB is tapped
+                    val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                        context, Manifest.permission.ACCESS_FINE_LOCATION
+                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                    if (hasPermission) {
+                        try {
+                            fusedLocationClient.getCurrentLocation(
+                                com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY, null
+                            ).addOnSuccessListener { location ->
+                                if (location != null) {
+                                    viewModel.updateUserLocation(LatLng(location.latitude, location.longitude))
+                                }
+                            }
+                        } catch (_: SecurityException) {}
+                    } else {
+                        locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                    }
+                }
             )
 
 

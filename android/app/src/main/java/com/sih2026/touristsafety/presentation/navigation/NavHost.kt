@@ -40,7 +40,33 @@ fun TouristSafetyNavHost(
     NavHost(
         navController = navController,
         startDestination = startDestination,
-        modifier = modifier
+        modifier = modifier,
+        enterTransition = {
+            androidx.compose.animation.fadeIn(
+                animationSpec = androidx.compose.animation.core.tween(250)
+            ) + androidx.compose.animation.scaleIn(
+                initialScale = 0.96f,
+                animationSpec = androidx.compose.animation.core.tween(250, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+            )
+        },
+        exitTransition = {
+            androidx.compose.animation.fadeOut(
+                animationSpec = androidx.compose.animation.core.tween(200)
+            )
+        },
+        popEnterTransition = {
+            androidx.compose.animation.fadeIn(
+                animationSpec = androidx.compose.animation.core.tween(250)
+            ) + androidx.compose.animation.scaleIn(
+                initialScale = 0.96f,
+                animationSpec = androidx.compose.animation.core.tween(250, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+            )
+        },
+        popExitTransition = {
+            androidx.compose.animation.fadeOut(
+                animationSpec = androidx.compose.animation.core.tween(200)
+            )
+        }
     ) {
         // Auth Flow
         composable(Screen.Onboarding.route) { OnboardingScreen(navController) }

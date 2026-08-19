@@ -1,5 +1,8 @@
 package com.sih2026.touristsafety.presentation.screens.chatbot
 
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -26,6 +29,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 
 import androidx.compose.ui.platform.LocalContext
 import com.google.android.gms.location.LocationServices
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +60,20 @@ fun ChatbotScreen(
             }
         } else {
             viewModel.sendMessage("Location access was denied.")
+        }
+    }
+
+    // Speech recognition launcher
+    val speechRecognizerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spokenText = result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull() ?: ""
+            if (spokenText.isNotBlank()) {
+                viewModel.updateInputText(spokenText)
+            }
         }
     }
 
@@ -128,7 +146,14 @@ fun ChatbotScreen(
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { /* Voice input */ }) {
+                IconButton(onClick = {
+                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+                        putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak now...")
+                    }
+                    speechRecognizerLauncher.launch(intent)
+                }) {
                     Icon(Icons.Default.Mic, contentDescription = "Voice Input")
                 }
                 

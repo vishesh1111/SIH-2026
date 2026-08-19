@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import com.sih2026.touristsafety.utils.QRCodeGenerator
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -21,6 +22,7 @@ fun DocumentDetailScreen(
     documentId: String,
     onNavigateBack: () -> Unit
 ) {
+    val context = LocalContext.current
     Scaffold(
         topBar = {
             TopAppBar(
@@ -31,10 +33,10 @@ fun DocumentDetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* Share */ }) {
+                    IconButton(onClick = { android.widget.Toast.makeText(context, "Share coming soon", android.widget.Toast.LENGTH_SHORT).show() }) {
                         Icon(Icons.Default.Share, contentDescription = "Share")
                     }
-                    IconButton(onClick = { /* Delete */ }) {
+                    IconButton(onClick = { android.widget.Toast.makeText(context, "Delete coming soon", android.widget.Toast.LENGTH_SHORT).show() }) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete")
                     }
                 }

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -59,6 +60,7 @@ fun IncidentReportScreen(
     val isAnalyzing by viewModel.isAnalyzing.collectAsState()
 
     var showSuccessDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -83,6 +85,7 @@ fun IncidentReportScreen(
                     onNext = { viewModel.nextStep() }
                 )
                 2 -> Step2IncidentDetails(
+                    photos = capturedPhotos,
                     incidentType = incidentType,
                     description = description,
                     location = location,
@@ -103,7 +106,11 @@ fun IncidentReportScreen(
                         viewModel.submitReport()
                         showSuccessDialog = true
                     },
-                    onSaveDraft = { viewModel.saveDraft() }
+                    onSaveDraft = { 
+                        viewModel.saveDraft()
+                        android.widget.Toast.makeText(context, "Draft saved successfully", android.widget.Toast.LENGTH_SHORT).show()
+                        onNavigateBack()
+                    }
                 )
             }
         }
@@ -258,12 +265,25 @@ fun Step1CaptureEvidence(
                             .clip(RoundedCornerShape(8.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
-                        Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.align(Alignment.Center))
+                        coil.compose.AsyncImage(
+                            model = uri,
+                            contentDescription = "Photo ${index + 1}",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
                         IconButton(
                             onClick = { onPhotoRemoved(index) },
-                            modifier = Modifier.align(Alignment.TopEnd).size(24.dp).padding(4.dp)
+                            modifier = Modifier.align(Alignment.TopEnd).size(24.dp)
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error)
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Remove",
+                                tint = Color.White,
+                                modifier = Modifier
+                                    .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                    .padding(2.dp)
+                                    .size(16.dp)
+                            )
                         }
                     }
                 }
@@ -286,6 +306,7 @@ fun Step1CaptureEvidence(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Step2IncidentDetails(
+    photos: List<Uri>,
     incidentType: String,
     description: String,
     location: LatLng?,
@@ -298,6 +319,7 @@ fun Step2IncidentDetails(
 ) {
     val scrollState = rememberScrollState()
     var expandedType by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     val types = listOf("Theft", "Snatching", "Harassment", "Accident", "Lost Item", "Fraud", "Assault", "Other")
 
     val sdf = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
@@ -310,6 +332,31 @@ fun Step2IncidentDetails(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Show captured photos
+        if (photos.isNotEmpty()) {
+            Text("Evidence Photos (${photos.size})", style = MaterialTheme.typography.labelLarge)
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().height(100.dp)
+            ) {
+                itemsIndexed(photos) { index, uri ->
+                    Box(
+                        modifier = Modifier
+                            .size(100.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        coil.compose.AsyncImage(
+                            model = uri,
+                            contentDescription = "Evidence ${index + 1}",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
+            }
+        }
+
         ExposedDropdownMenuBox(
             expanded = expandedType,
             onExpandedChange = { expandedType = !expandedType }
@@ -365,7 +412,7 @@ fun Step2IncidentDetails(
                 label = { Text("Location") },
                 modifier = Modifier.weight(1f)
             )
-            IconButton(onClick = { /* Edit on Map */ }) {
+            IconButton(onClick = { android.widget.Toast.makeText(context, "Map edit coming soon", android.widget.Toast.LENGTH_SHORT).show() }) {
                 Icon(Icons.Default.Map, contentDescription = "Edit Location")
             }
         }
@@ -438,6 +485,24 @@ fun Step3ReviewSubmit(
                 Text("Description: $description")
                 Text("Location: ${location?.latitude}, ${location?.longitude}")
                 Text("Photos attached: ${photos.size}")
+                if (photos.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth().height(80.dp)
+                    ) {
+                        itemsIndexed(photos) { index, uri ->
+                            coil.compose.AsyncImage(
+                                model = uri,
+                                contentDescription = "Photo ${index + 1}",
+                                modifier = Modifier
+                                    .size(80.dp)
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+                }
             }
         }
 

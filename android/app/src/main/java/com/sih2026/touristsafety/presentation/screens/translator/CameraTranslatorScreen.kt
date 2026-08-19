@@ -21,6 +21,7 @@ fun CameraTranslatorScreen(
 ) {
     val targetLang by viewModel.targetLanguage.collectAsState()
     var isShowingOriginal by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Scaffold(
         topBar = {
@@ -32,7 +33,7 @@ fun CameraTranslatorScreen(
                     }
                 },
                 actions = {
-                    TextButton(onClick = { /* show lang picker */ }) {
+                    TextButton(onClick = { android.widget.Toast.makeText(context, "Language picker coming soon", android.widget.Toast.LENGTH_SHORT).show() }) {
                         Text(targetLang.name)
                     }
                 },
@@ -81,7 +82,7 @@ fun CameraTranslatorScreen(
                 }
 
                 FloatingActionButton(
-                    onClick = { /* Capture Frame */ },
+                    onClick = { android.widget.Toast.makeText(context, "Image captured", android.widget.Toast.LENGTH_SHORT).show() },
                     containerColor = MaterialTheme.colorScheme.primary
                 ) {
                     Icon(Icons.Default.Camera, "Capture")

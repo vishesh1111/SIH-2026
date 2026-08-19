@@ -14,9 +14,12 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import com.sih2026.touristsafety.data.local.entities.ProfileEntity
 
+import com.sih2026.touristsafety.data.local.dao.ProfileDao
+
 @HiltViewModel
 class EProfileViewModel @Inject constructor(
-    private val documentDao: DocumentDao
+    private val documentDao: DocumentDao,
+    private val profileDao: ProfileDao
 ) : ViewModel() {
 
     private val _profile = MutableStateFlow<ProfileEntity?>(null)
@@ -34,19 +37,38 @@ class EProfileViewModel @Inject constructor(
     }
 
     fun loadProfile() {
-        // Mock profile data
-        _profile.value = ProfileEntity(
-            id = "u1",
-            fullName = "Vishesh Verma",
-            nationality = "Indian",
-            gender = "Male",
-            phone = "+91 9876543210",
-            email = "test@example.com",
-            passportNumber = null,
-            visaNumber = null,
-            profilePhotoUrl = null,
-            createdAt = System.currentTimeMillis()
-        )
+        viewModelScope.launch {
+            var dbProfile = profileDao.getProfile("u1")
+            if (dbProfile == null) {
+                dbProfile = ProfileEntity(
+                    id = "u1",
+                    fullName = "Vishesh Verma",
+                    nationality = "Indian",
+                    gender = "Male",
+                    phone = "+91 9876543210",
+                    email = "test@example.com",
+                    passportNumber = null,
+                    visaNumber = null,
+                    profilePhotoUrl = null,
+                    createdAt = System.currentTimeMillis()
+                )
+                profileDao.insertProfile(dbProfile)
+            }
+            _profile.value = dbProfile
+        }
+    }
+
+    fun updateProfile(fullName: String, nationality: String, gender: String) {
+        viewModelScope.launch {
+            val currentProfile = _profile.value ?: return@launch
+            val updatedProfile = currentProfile.copy(
+                fullName = fullName,
+                nationality = nationality,
+                gender = gender
+            )
+            profileDao.insertProfile(updatedProfile)
+            _profile.value = updatedProfile
+        }
     }
 
     fun loadDocuments() {

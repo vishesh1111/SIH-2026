@@ -24,6 +24,7 @@ fun EmergencyContactsScreen(
     onNavigateNext: (() -> Unit)? = null // Used during onboarding
 ) {
     val contacts by viewModel.contacts.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
     var showAddSheet by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -74,7 +75,7 @@ fun EmergencyContactsScreen(
                     ContactCard(
                         contact = contact,
                         onDelete = { viewModel.deleteContact(contact.id) },
-                        onClick = { /* Handle edit */ }
+                        onClick = { android.widget.Toast.makeText(context, "Edit coming soon", android.widget.Toast.LENGTH_SHORT).show() }
                     )
                 }
             }

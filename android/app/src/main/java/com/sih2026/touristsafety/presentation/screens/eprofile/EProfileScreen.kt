@@ -38,6 +38,8 @@ fun EProfileScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     
     var showQrDialog by remember { mutableStateOf(false) }
+    var showEditDialog by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Scaffold(
         topBar = {
@@ -78,7 +80,7 @@ fun EProfileScreen(
                                 modifier = Modifier
                                     .size(80.dp)
                                     .clip(CircleShape)
-                                    .clickable { /* Update Avatar */ }
+                                    .clickable { android.widget.Toast.makeText(context, "Avatar update coming soon", android.widget.Toast.LENGTH_SHORT).show() }
                             ) {
                                 // Placeholder for avatar
                                 Surface(
@@ -109,7 +111,7 @@ fun EProfileScreen(
                                     )
                                 }
                                 Text("${p.nationality} • ${p.gender}")
-                                TextButton(onClick = { /* Edit Profile */ }, contentPadding = PaddingValues(0.dp)) {
+                                TextButton(onClick = { showEditDialog = true }, contentPadding = PaddingValues(0.dp)) {
                                     Text("Edit Profile")
                                 }
                             }
@@ -142,7 +144,7 @@ fun EProfileScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(1f)
-                                .clickable { /* Navigate to category list */ }
+                                .clickable { onNavigateToUpload() }
                         ) {
                             Column(
                                 modifier = Modifier
@@ -200,5 +202,53 @@ fun EProfileScreen(
                 }
             }
         }
+    }
+
+    if (showEditDialog && profile != null) {
+        var editName by remember { mutableStateOf(profile!!.fullName) }
+        var editNationality by remember { mutableStateOf(profile!!.nationality) }
+        var editGender by remember { mutableStateOf(profile!!.gender) }
+
+        AlertDialog(
+            onDismissRequest = { showEditDialog = false },
+            title = { Text("Edit Profile") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = editName,
+                        onValueChange = { editName = it },
+                        label = { Text("Full Name") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editNationality,
+                        onValueChange = { editNationality = it },
+                        label = { Text("Nationality") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editGender,
+                        onValueChange = { editGender = it },
+                        label = { Text("Gender") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.updateProfile(editName, editNationality, editGender)
+                    showEditDialog = false
+                }) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

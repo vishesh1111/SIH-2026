@@ -9,6 +9,7 @@ import com.sih2026.touristsafety.data.local.entities.EmergencyContactEntity
 import com.sih2026.touristsafety.data.local.entities.GeofenceZoneEntity
 import com.sih2026.touristsafety.data.local.entities.IncidentEntity
 import com.sih2026.touristsafety.data.local.entities.ProfileEntity
+import com.sih2026.touristsafety.data.local.entities.ReceivedSOSAlertEntity
 
 @Database(
     entities = [
@@ -18,9 +19,10 @@ import com.sih2026.touristsafety.data.local.entities.ProfileEntity
         IncidentEntity::class,
         DisasterAlertEntity::class,
         DocumentEntity::class,
-        ChatMessageEntity::class
+        ChatMessageEntity::class,
+        ReceivedSOSAlertEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class TouristSafetyDatabase : RoomDatabase() {
@@ -31,4 +33,5 @@ abstract class TouristSafetyDatabase : RoomDatabase() {
     abstract fun disasterAlertDao(): com.sih2026.touristsafety.data.local.dao.DisasterAlertDao
     abstract fun documentDao(): com.sih2026.touristsafety.data.local.dao.DocumentDao
     abstract fun chatMessageDao(): com.sih2026.touristsafety.data.local.dao.ChatMessageDao
+    abstract fun receivedSOSAlertDao(): com.sih2026.touristsafety.data.local.dao.ReceivedSOSAlertDao
 }

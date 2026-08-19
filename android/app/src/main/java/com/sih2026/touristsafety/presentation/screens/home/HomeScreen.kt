@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.sih2026.touristsafety.presentation.components.BottomNavBar
 import com.sih2026.touristsafety.presentation.components.SOSButton
+import com.sih2026.touristsafety.presentation.components.bounceClick
 import com.sih2026.touristsafety.presentation.navigation.Screen
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -80,7 +81,8 @@ fun HomeScreen(navController: NavController) {
                     contentDescription = "Profile",
                     modifier = Modifier
                         .size(48.dp)
-                        .clip(CircleShape),
+                        .clip(CircleShape)
+                        .bounceClick { navController.navigate(Screen.EProfile.route) },
                     tint = MaterialTheme.colorScheme.primary
                 )
             }
@@ -122,7 +124,7 @@ fun HomeScreen(navController: NavController) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(100.dp)
-                            .clickable { navController.navigate(action.route) },
+                            .bounceClick { navController.navigate(action.route) },
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.elevatedCardColors(
                             containerColor = MaterialTheme.colorScheme.surface

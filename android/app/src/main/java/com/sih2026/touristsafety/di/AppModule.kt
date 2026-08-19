@@ -13,6 +13,7 @@ import com.sih2026.touristsafety.data.local.dao.EmergencyContactDao
 import com.sih2026.touristsafety.data.local.dao.GeofenceZoneDao
 import com.sih2026.touristsafety.data.local.dao.IncidentDao
 import com.sih2026.touristsafety.data.local.dao.ProfileDao
+import com.sih2026.touristsafety.data.local.dao.ReceivedSOSAlertDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -39,7 +40,7 @@ object AppModule {
             appContext,
             TouristSafetyDatabase::class.java,
             "tourist_safety_db"
-        ).build()
+        ).fallbackToDestructiveMigration().build()
     }
 
     // DAO providers
@@ -50,6 +51,7 @@ object AppModule {
     @Provides fun provideDisasterAlertDao(db: TouristSafetyDatabase): DisasterAlertDao = db.disasterAlertDao()
     @Provides fun provideDocumentDao(db: TouristSafetyDatabase): DocumentDao = db.documentDao()
     @Provides fun provideChatMessageDao(db: TouristSafetyDatabase): ChatMessageDao = db.chatMessageDao()
+    @Provides fun provideReceivedSOSAlertDao(db: TouristSafetyDatabase): ReceivedSOSAlertDao = db.receivedSOSAlertDao()
 
     @Provides
     @Singleton
