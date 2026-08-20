@@ -33,6 +33,9 @@ class ScreamDetectionService : Service() {
         
         private val _threatLevel = MutableSharedFlow<ThreatLevel>(replay = 1)
         val threatLevel = _threatLevel.asSharedFlow()
+        
+        private val _activeSpeakerGender = MutableSharedFlow<String?>(replay = 1)
+        val activeSpeakerGender = _activeSpeakerGender.asSharedFlow()
     }
 
     private val job = SupervisorJob()
@@ -97,6 +100,7 @@ class ScreamDetectionService : Service() {
     private suspend fun processAudio(audioData: ShortArray) {
         // VAD
         if (!AudioProcessor.isVoiceDetected(audioData, sampleRate)) {
+            _activeSpeakerGender.emit(null)
             return
         }
         
@@ -105,7 +109,10 @@ class ScreamDetectionService : Service() {
         
         // Phase 1: Noise vs Human
         val phase1Result = MLModelManager.runScreamPhase1Inference(null, mfccs)
-        if (phase1Result != 2) return // Noise
+        if (phase1Result != 2) {
+            _activeSpeakerGender.emit(null)
+            return // Noise
+        }
         
         // Phase 2: Scream vs Speech
         val phase2Result = MLModelManager.runScreamPhase2Inference(null, mfccs)
@@ -115,6 +122,8 @@ class ScreamDetectionService : Service() {
         val melSpecs = AudioProcessor.extractMelSpectrogram(audioData, sampleRate)
         val maleProb = MLModelManager.runGenderInference(null, melSpecs)
         val gender = if (maleProb > 0.5f) "male" else "female"
+        
+        _activeSpeakerGender.emit(gender)
         
         val distressProb = MLModelManager.runDistressInference(null, FloatArray(0)) // mock input
         
@@ -161,7 +170,7 @@ class ScreamDetectionService : Service() {
         }
         
         val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Women Safety Active")
+            .setContentTitle("Safety Monitor Active")
             .setContentText("Monitoring for screams and distress signals...")
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .build()

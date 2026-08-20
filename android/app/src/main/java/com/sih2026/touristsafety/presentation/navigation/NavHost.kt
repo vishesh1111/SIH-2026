@@ -153,7 +153,7 @@ fun TouristSafetyNavHost(
             )
         }
 
-        // Women Safety (Feature 11) — expects onNavigateBack
+        // Safety Monitor (Feature 11) — expects onNavigateBack
         composable(Screen.WomenSafety.route) {
             WomenSafetyScreen(onNavigateBack = { navController.popBackStack() })
         }

@@ -33,6 +33,7 @@ fun WomenSafetyScreen(
     val threatLevel by viewModel.currentThreatLevel.collectAsState()
     val detectionLog by viewModel.detectionLog.collectAsState()
     val sensitivity by viewModel.sensitivity.collectAsState()
+    val activeSpeakerGender by viewModel.activeSpeakerGender.collectAsState()
 
     val threatColor = when (threatLevel) {
         ThreatLevel.LOW -> Color(0xFF388E3C)
@@ -44,7 +45,7 @@ fun WomenSafetyScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Women Safety") },
+                title = { Text("Safety Monitor") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -53,6 +54,29 @@ fun WomenSafetyScreen(
             )
         }
     ) { padding ->
+        var showSavedPopup by remember { mutableStateOf(false) }
+        var previousIsEnabled by remember { mutableStateOf(isEnabled) }
+
+        LaunchedEffect(isEnabled) {
+            if (previousIsEnabled && !isEnabled) {
+                showSavedPopup = true
+            }
+            previousIsEnabled = isEnabled
+        }
+
+        if (showSavedPopup) {
+            AlertDialog(
+                onDismissRequest = { showSavedPopup = false },
+                title = { Text("Recording Saved") },
+                text = { Text("The audio recording has been safely stored locally on your device.") },
+                confirmButton = {
+                    TextButton(onClick = { showSavedPopup = false }) {
+                        Text("OK")
+                    }
+                }
+            )
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -83,6 +107,15 @@ fun WomenSafetyScreen(
                     Text("Audio Monitoring: ${if (isEnabled) "Active" else "Inactive"}")
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("Threat Level: ${threatLevel.name}", color = threatColor, fontWeight = FontWeight.Bold)
+                    
+                    if (isEnabled && activeSpeakerGender != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Active Speaker: ${activeSpeakerGender!!.replaceFirstChar { it.uppercase() }}",
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     
                     if (isEnabled) {
                         Spacer(modifier = Modifier.height(16.dp))
@@ -125,7 +158,7 @@ fun WomenSafetyScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Column {
                                 val date = Date(log.timestamp)
-                                val format = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                                val format = SimpleDateFormat("hh:mm:ss a", Locale.getDefault())
                                 Text(log.type, fontWeight = FontWeight.Bold)
                                 Text("${format.format(date)} - ${log.result}", style = MaterialTheme.typography.bodySmall)
                             }

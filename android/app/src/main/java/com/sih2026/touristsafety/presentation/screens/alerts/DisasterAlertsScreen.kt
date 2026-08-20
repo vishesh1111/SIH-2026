@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Warning
@@ -205,22 +206,28 @@ fun DisasterAlertsScreen(
 
             // Alerts list
             if (alerts.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+                ElevatedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = Color(0xFFE8F5E9)
+                    )
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(
-                            Icons.Default.Shield,
-                            contentDescription = null,
-                            tint = Color(0xFF4CAF50),
-                            modifier = Modifier.size(64.dp)
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Alerts",
+                            tint = Color(0xFF2E7D32)
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            "No active alerts in your area",
-                            color = Color(0xFF4CAF50),
-                            style = MaterialTheme.typography.titleMedium
+                            text = "No active alerts in your area",
+                            color = Color(0xFF2E7D32),
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }

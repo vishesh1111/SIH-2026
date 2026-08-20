@@ -248,7 +248,8 @@ fun HomeScreen(navController: NavController) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column {
                     Text(
@@ -261,6 +262,15 @@ fun HomeScreen(navController: NavController) {
                         text = "Stay safe and explore",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                    )
+                }
+                
+                IconButton(onClick = { navController.navigate(Screen.EProfile.route) }) {
+                    Icon(
+                        imageVector = Icons.Default.AccountCircle,
+                        contentDescription = "Profile",
+                        modifier = Modifier.size(40.dp),
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
@@ -330,32 +340,6 @@ fun HomeScreen(navController: NavController) {
                 }
             }
 
-            // Active Alerts Section
-            ElevatedCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                colors = CardDefaults.elevatedCardColors(
-                    containerColor = Color(0xFFE8F5E9)
-                )
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = "Alerts",
-                        tint = Color(0xFF2E7D32)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = "No active alerts in your area",
-                        color = Color(0xFF2E7D32),
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
         }
     }
 }

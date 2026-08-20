@@ -230,28 +230,47 @@ def scream(filename):
         return -1  
 
 
-# Main function to check gender
-def check_gender(file):
-    # load the saved model (after training)
-    # model = pickle.load(open("result/mlp_classifier.model", "rb"))
-    from utils import create_model
-    # construct the model
-    model = create_model()
-    #load the saved/trained weights
-    model.load_weights("models/gender.h5")
-    features = extract_feature(file, mel=True).reshape(1, -1)
-    # predict the gender!
-    male_prob = model.predict(features)[0][0]
-    female_prob = 1 - male_prob
-    gender = "male" if male_prob > female_prob else "female"
-    #show the result!
-    print("Result:", gender)
-    print(f"Probabilities:     Male: {male_prob*100:.2f}%    Female: {female_prob*100:.2f}%")
+_gender_model = None
 
-    if(male_prob > female_prob):
-        return 'male',features
-    else:
-        return 'female',features
+
+def _get_gender_model():
+    """Load the gender classifier once and reuse it across audio chunks."""
+    global _gender_model
+    if _gender_model is None:
+        from utils import create_model
+        _gender_model = create_model()
+        _gender_model.load_weights("models/gender.h5")
+    return _gender_model
+
+
+def predict_gender(file):
+    """
+    Classify speaker gender from a WAV file using the existing mel-spectrogram pipeline.
+
+    Model output is a single sigmoid unit (see utils.label2int): values closer to 1 mean
+    male, values closer to 0 mean female.
+
+    Returns:
+        (gender, features): gender is "male" or "female"; features is the 128-d mel vector.
+        (None, None) if preprocessing or inference fails.
+    """
+    try:
+        features = extract_feature(file, mel=True).reshape(1, -1)
+        model = _get_gender_model()
+        male_prob = float(model.predict(features, verbose=0)[0][0])
+        female_prob = 1.0 - male_prob
+        gender = "male" if male_prob > female_prob else "female"
+        print("Result:", gender)
+        print(f"Probabilities:     Male: {male_prob*100:.2f}%    Female: {female_prob*100:.2f}%")
+        return gender, features.reshape(-1)
+    except Exception as exc:
+        print(f"Gender prediction failed: {exc}")
+        return None, None
+
+
+def check_gender(file):
+    """Backward-compatible alias for predict_gender."""
+    return predict_gender(file)
 
 def check_distress(file):
     from utils import create_model2
@@ -331,39 +350,44 @@ men_shout_detected = False  # Initialize as False
 distress = 0
 
 def threat():  
-    global women_scream_detected, men_shout_detected, distress  # Declare global variables to modify them  
-    # Updating the labels according to the threat  
-    file,b = argpass_to_file()
+    global women_scream_detected, men_shout_detected, distress
+    file, b = argpass_to_file()
     if not vad(file):
-        return   
-    scream_result = scream(file)  # Store the result of scream(file) to avoid redundant calls  
+        return
+
+    # Gender prediction first (cached model, fast)
+    gender, features = predict_gender(file)
+    if gender is None:
+        print("Skipping detection: gender prediction unavailable.")
+        return np.array([len(unique_men), len(unique_women), women_scream_detected, men_shout_detected, distress]), b
+
+    # Scream detection — runs for ALL genders
+    scream_result = scream(file)
+
+    # Distress detection — runs for ALL genders
     y = check_distress(file)
-    if y :
-        distress = 1
-    else :
-        distress = 0
+    distress = 1 if y else 0
     print(y)
-    if scream_result != -1:  
-        gender, features = check_gender(file) 
-        features_tuple = tuple(np.ndarray.flatten(np.round(features,decimals=5)))  # Convert features to a tuple
-         
-        if gender == 'male':  
-            unique_men.add(features_tuple)  # Add the tuple to the set  
-        else:  
-            unique_women.add(features_tuple)  # Add the tuple to the set  
-        
-        if scream_result == 1:  # Check the scream result  
-            if gender == 'male':  
-                men_shout_detected = True  
-            else:  
-                women_scream_detected = True  
-    
-    return np.array([len(unique_men), len(unique_women), women_scream_detected, men_shout_detected, distress]),b  
+
+    # Track unique speakers and scream flags by gender
+    if scream_result != -1:
+        features_tuple = tuple(np.ndarray.flatten(np.round(features, decimals=5)))
+
+        if gender == "male":
+            unique_men.add(features_tuple)
+            if scream_result == 1:
+                men_shout_detected = True
+        else:
+            unique_women.add(features_tuple)
+            if scream_result == 1:
+                women_scream_detected = True
+
+    return np.array([len(unique_men), len(unique_women), women_scream_detected, men_shout_detected, distress]), b
 
 def run_threat_repeatedly():  
     start_time = time.time()  # Record the start time  
     while True:  
-        result,b = threat()  # Execute the threat function
+        result, b = threat()  # Execute the threat function
         print("Current Detection Status:", result)  # Print the current detection status
         if b:
             break  
@@ -377,16 +401,18 @@ def run_threat_repeatedly():
         time.sleep(4)  # Wait for 2 seconds before the next check  
 
 def reset_labels():  
-    global unique_men, unique_women, women_scream_detected, men_shout_detected  
-    unique_men.clear()  # Clear the set of unique men  
-    unique_women.clear()  # Clear the set of unique women  
-    women_scream_detected = False  # Reset scream detection  
-    men_shout_detected = False  # Reset shout detection 
-    distress = False 
-    print("Labels have been reset.")  
+    global unique_men, unique_women, women_scream_detected, men_shout_detected, distress
+    unique_men.clear()
+    unique_women.clear()
+    women_scream_detected = False
+    men_shout_detected = False
+    distress = 0
+    print("Labels have been reset.")
 
-# Example of running the repeated threat function  
-run_threat_repeatedly()  
+# Example of running the repeated threat function
+if __name__ == "__main__":
+    run_threat_repeatedly()
+
 
 
 
