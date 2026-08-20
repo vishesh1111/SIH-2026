@@ -69,7 +69,7 @@ fun OsmMapView(
                     val placeMarker = Marker(map)
                     placeMarker.position = GeoPoint(place.latitude, place.longitude)
                     placeMarker.title = place.name
-                    placeMarker.snippet = place.type
+                    placeMarker.snippet = "${place.distance} km away • ${place.type.replaceFirstChar { if (it.isLowerCase()) it.titlecase(java.util.Locale.getDefault()) else it.toString() }}"
                     
                     val iconRes = when (place.type.lowercase()) {
                         "hospital" -> R.drawable.ic_hospital

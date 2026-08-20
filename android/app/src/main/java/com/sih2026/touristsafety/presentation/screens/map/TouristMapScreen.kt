@@ -188,7 +188,7 @@ fun NearbyPlacesList(places: List<NearbyPlace>) {
                         Spacer(modifier = Modifier.width(16.dp))
                         Column {
                             Text(place.name, style = MaterialTheme.typography.titleMedium)
-                            Text("${place.distance} km • ${place.rating} ★", style = MaterialTheme.typography.bodyMedium)
+                            Text("${place.distance} km • ${String.format(java.util.Locale.US, "%.1f", place.rating)} ★", style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                 }
@@ -199,8 +199,13 @@ fun NearbyPlacesList(places: List<NearbyPlace>) {
 
 @Composable
 fun TouristsList(tourists: List<TouristLocation>, onConnect: (String) -> Unit) {
+    val connectionStates = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
+    val context = LocalContext.current
+
     LazyColumn(contentPadding = PaddingValues(16.dp)) {
         items(tourists) { tourist ->
+            val isConnecting = connectionStates[tourist.id] == true
+
             Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                 Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Person, contentDescription = null)
@@ -209,8 +214,22 @@ fun TouristsList(tourists: List<TouristLocation>, onConnect: (String) -> Unit) {
                         Text(tourist.name, style = MaterialTheme.typography.titleMedium)
                         Text(tourist.nationality, style = MaterialTheme.typography.bodyMedium)
                     }
-                    Button(onClick = { onConnect(tourist.id) }) {
-                        Text("Connect")
+                    
+                    if (isConnecting) {
+                        TextButton(
+                            onClick = { },
+                            enabled = false
+                        ) {
+                            Text("Connecting...")
+                        }
+                    } else {
+                        Button(onClick = { 
+                            connectionStates[tourist.id] = true
+                            android.widget.Toast.makeText(context, "Connecting to ${tourist.name}...", android.widget.Toast.LENGTH_SHORT).show()
+                            onConnect(tourist.id)
+                        }) {
+                            Text("Connect")
+                        }
                     }
                 }
             }

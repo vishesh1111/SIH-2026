@@ -9,7 +9,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.QrCode
@@ -24,6 +24,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
+
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
+import coil.compose.AsyncImage
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,13 +47,28 @@ fun EProfileScreen(
     var showEditDialog by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
 
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        onResult = { uri ->
+            if (uri != null) {
+                try {
+                    val flag = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    context.contentResolver.takePersistableUriPermission(uri, flag)
+                } catch (e: Exception) {
+                    // Ignore if takePersistableUriPermission fails, which might happen depending on the provider
+                }
+                viewModel.updateProfilePhoto(uri.toString())
+            }
+        }
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("E-Profile Vault") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -80,18 +101,31 @@ fun EProfileScreen(
                                 modifier = Modifier
                                     .size(80.dp)
                                     .clip(CircleShape)
-                                    .clickable { android.widget.Toast.makeText(context, "Avatar update coming soon", android.widget.Toast.LENGTH_SHORT).show() }
+                                    .clickable {
+                                        photoPickerLauncher.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                        )
+                                    }
                             ) {
-                                // Placeholder for avatar
-                                Surface(
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    modifier = Modifier.fillMaxSize()
-                                ) {
-                                    Icon(
-                                        Icons.Default.CameraAlt,
-                                        contentDescription = "Avatar",
-                                        modifier = Modifier.padding(24.dp)
+                                if (p.profilePhotoUrl != null) {
+                                    AsyncImage(
+                                        model = p.profilePhotoUrl,
+                                        contentDescription = "Profile Photo",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
                                     )
+                                } else {
+                                    // Placeholder for avatar
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        Icon(
+                                            Icons.Default.CameraAlt,
+                                            contentDescription = "Avatar",
+                                            modifier = Modifier.padding(24.dp)
+                                        )
+                                    }
                                 }
                             }
                             Spacer(modifier = Modifier.width(16.dp))
@@ -139,12 +173,25 @@ fun EProfileScreen(
                     modifier = Modifier.weight(1f)
                 ) {
                     items(categories) { (catName, icon) ->
-                        val count = documents[catName]?.size ?: 0
+                        val categoryDocs = documents[catName] ?: emptyList()
+                        val count = categoryDocs.size
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(1f)
-                                .clickable { onNavigateToUpload() }
+                                .clickable {
+                                    if (count == 0) {
+                                        onNavigateToUpload()
+                                    } else {
+                                        // Show list of documents or navigate to detail
+                                        if (count == 1) {
+                                            onNavigateToDetail(categoryDocs.first().id)
+                                        } else {
+                                            // Ideally open a list, for now just open the first one
+                                            onNavigateToDetail(categoryDocs.first().id)
+                                        }
+                                    }
+                                }
                         ) {
                             Column(
                                 modifier = Modifier
@@ -155,7 +202,7 @@ fun EProfileScreen(
                             ) {
                                 Text(text = icon, style = MaterialTheme.typography.displaySmall)
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Text(text = catName, fontWeight = FontWeight.SemiBold)
+                                Text(text = catName, fontWeight = FontWeight.SemiBold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                                 Text(text = "$count documents", style = MaterialTheme.typography.bodySmall)
                             }
                         }

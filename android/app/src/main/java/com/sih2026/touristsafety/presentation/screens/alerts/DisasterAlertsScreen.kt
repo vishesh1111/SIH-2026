@@ -23,6 +23,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.sih2026.touristsafety.data.local.entities.DisasterAlertEntity
 import java.util.concurrent.TimeUnit
 
+import android.Manifest
+import android.location.Geocoder
+import androidx.compose.ui.platform.LocalContext
+import com.google.android.gms.location.LocationServices
+import java.util.Locale
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DisasterAlertsScreen(
@@ -32,6 +38,59 @@ fun DisasterAlertsScreen(
     val selectedFilter by viewModel.selectedFilter.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isOffline by viewModel.isOffline.collectAsState()
+
+    val context = LocalContext.current
+    var currentLocationText by remember { mutableStateOf("Locating...") }
+    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+
+    LaunchedEffect(Unit) {
+        val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_FINE_LOCATION
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        
+        if (hasPermission) {
+            try {
+                fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                    if (location != null) {
+                        try {
+                            val geocoder = Geocoder(context, Locale.getDefault())
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                geocoder.getFromLocation(location.latitude, location.longitude, 1) { addresses ->
+                                    if (addresses.isNotEmpty()) {
+                                        val address = addresses[0]
+                                        val city = address.locality ?: address.subAdminArea ?: "Unknown City"
+                                        val state = address.adminArea ?: "Unknown State"
+                                        currentLocationText = "$city, $state"
+                                    } else {
+                                        currentLocationText = "Location unknown"
+                                    }
+                                }
+                            } else {
+                                @Suppress("DEPRECATION")
+                                val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
+                                if (!addresses.isNullOrEmpty()) {
+                                    val address = addresses[0]
+                                    val city = address.locality ?: address.subAdminArea ?: "Unknown City"
+                                    val state = address.adminArea ?: "Unknown State"
+                                    currentLocationText = "$city, $state"
+                                } else {
+                                    currentLocationText = "Location unknown"
+                                }
+                            }
+                        } catch (e: Exception) {
+                            currentLocationText = "Location unavailable"
+                        }
+                    } else {
+                        currentLocationText = "Location not found"
+                    }
+                }
+            } catch (e: SecurityException) {
+                currentLocationText = "Permission denied"
+            }
+        } else {
+            currentLocationText = "Location permission required"
+        }
+    }
 
     val filters = listOf("All", "Cyclone", "Flood", "Earthquake", "Heat Wave", "Other")
 
@@ -78,7 +137,7 @@ fun DisasterAlertsScreen(
             ) {
                 Icon(Icons.Default.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Current Location: Mumbai, Maharashtra", style = MaterialTheme.typography.titleMedium)
+                Text("Current Location: $currentLocationText", style = MaterialTheme.typography.titleMedium)
             }
 
             // Filters

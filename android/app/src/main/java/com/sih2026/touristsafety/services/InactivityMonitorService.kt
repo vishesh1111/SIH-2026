@@ -1,41 +1,111 @@
 package com.sih2026.touristsafety.services
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.location.Location
 import android.os.Build
 import android.os.IBinder
+import android.os.Looper
+import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.google.android.gms.location.*
+import com.sih2026.touristsafety.R
+import com.sih2026.touristsafety.data.local.InactivityPreferences
+import com.sih2026.touristsafety.data.local.dao.GeofenceZoneDao
 import com.sih2026.touristsafety.presentation.screens.checkin.CheckInPromptActivity
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlin.random.Random
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
+import javax.inject.Inject
+import kotlin.math.pow
+import kotlin.math.sqrt
 
+@AndroidEntryPoint
 class InactivityMonitorService : Service() {
 
-    private val serviceJob = Job()
-    private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
-    
-    private var lastLocation: Location? = null
-    private var stationaryStartTime: Long = 0
-    private var directionChanges = 0
-    
+    @Inject lateinit var sosManager: SOSManager
+    @Inject lateinit var geofenceZoneDao: GeofenceZoneDao
+    @Inject lateinit var inactivityPreferences: InactivityPreferences
+
     companion object {
         const val CHANNEL_ID = "InactivityMonitorChannel"
         const val NOTIFICATION_ID = 101
+        private const val TAG = "InactivityMonitor"
+    }
+
+    private val serviceJob = Job()
+    private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
+
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private val locationHistory = ArrayDeque<Location>(20)
+
+    private lateinit var sensorManager: SensorManager
+    private var accelerometer: Sensor? = null
+    private val accelerometerReadings = mutableListOf<Float>()
+
+    private val sensorListener = object : SensorEventListener {
+        override fun onSensorChanged(event: SensorEvent?) {
+            event?.let {
+                val magnitude = sqrt(it.values[0].pow(2) + it.values[1].pow(2) + it.values[2].pow(2))
+                synchronized(accelerometerReadings) {
+                    accelerometerReadings.add(magnitude)
+                    if (accelerometerReadings.size > 300) accelerometerReadings.removeAt(0)
+                }
+            }
+        }
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+    }
+
+    private val locationCallback = object : LocationCallback() {
+        override fun onLocationResult(result: LocationResult) {
+            result.lastLocation?.let { location ->
+                synchronized(locationHistory) {
+                    locationHistory.addLast(location)
+                    if (locationHistory.size > 20) locationHistory.removeFirst()
+                }
+            }
+        }
     }
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+
+        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        accelerometer?.let {
+            sensorManager.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_NORMAL)
+        }
+
+        startLocationUpdates()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startLocationUpdates() {
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 30_000L)
+            .setMinUpdateIntervalMillis(15_000L)
+            .build()
+
+        try {
+            fusedLocationClient.requestLocationUpdates(
+                locationRequest,
+                locationCallback,
+                Looper.getMainLooper()
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to request location updates", e)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -47,29 +117,38 @@ class InactivityMonitorService : Service() {
     private fun startMonitoring() {
         serviceScope.launch {
             while (true) {
-                // Mocking GPS check every 30 seconds
-                delay(30_000)
+                delay(30_000) // analyze every 30 seconds
+
+                // Read preferences
+                val enabled = inactivityPreferences.isEnabled.first()
+                if (!enabled) continue
+
                 analyzeLocationData()
             }
         }
     }
 
-    private fun analyzeLocationData() {
+    private suspend fun analyzeLocationData() {
         var score = 0
-        
-        // Mock checks
-        val isStationary = isStationary()
-        val isInactive = isInactive()
-        val hasUnusualMovement = hasUnusualMovement()
-        val hasSpeedAnomaly = hasSpeedAnomaly()
-        val isNightTime = isNightTime()
-        val inDangerZone = inDangerZone()
-        
-        if (isStationary && isInactive) score += 40
-        if (hasUnusualMovement) score += 30
-        if (hasSpeedAnomaly) score += 50
-        if (isNightTime) score += 20
-        if (inDangerZone) score += 20
+
+        val stationaryEnabled = inactivityPreferences.stationaryDetection.first()
+        val unusualEnabled = inactivityPreferences.unusualMovement.first()
+        val speedEnabled = inactivityPreferences.speedAnomaly.first()
+
+        val stationary = isStationary()
+        val inactive = isInactive()
+        val unusual = if (unusualEnabled) hasUnusualMovement() else false
+        val speedAnomaly = if (speedEnabled) hasSpeedAnomaly() else false
+        val nightTime = isNightTime()
+        val dangerZone = inDangerZone()
+
+        if (stationaryEnabled && stationary && inactive) score += 40
+        if (unusual) score += 30
+        if (speedAnomaly) score += 50
+        if (nightTime) score += 20
+        if (dangerZone) score += 20
+
+        Log.d(TAG, "Score=$score stationary=$stationary inactive=$inactive unusual=$unusual speed=$speedAnomaly night=$nightTime danger=$dangerZone")
 
         if (score >= 80) {
             triggerSOS()
@@ -79,33 +158,64 @@ class InactivityMonitorService : Service() {
     }
 
     private fun isStationary(): Boolean {
-        // Mock logic
-        return Random.nextBoolean() && Random.nextBoolean() // 25% chance true
+        val history = synchronized(locationHistory) { locationHistory.toList() }
+        if (history.size < 5) return false
+        val recent = history.takeLast(5)
+        val anchor = recent.first()
+        return recent.all { anchor.distanceTo(it) < 15f } // all within 15 meters
     }
 
     private fun isInactive(): Boolean {
-        // Mock logic - screen is off / no interaction
-        return Random.nextBoolean()
+        val readings = synchronized(accelerometerReadings) { accelerometerReadings.toList() }
+        if (readings.size < 60) return false // need at least 1 minute of data
+        val recent = readings.takeLast(60)
+        val mean = recent.average()
+        val variance = recent.map { (it - mean) * (it - mean) }.average()
+        return variance < 0.05 // very low variance = phone not moving
     }
 
     private fun hasUnusualMovement(): Boolean {
-        // Mock zigzag
-        return false
+        val history = synchronized(locationHistory) { locationHistory.toList() }
+        if (history.size < 10) return false
+        val recent = history.takeLast(10)
+        var sharpTurns = 0
+        for (i in 1 until recent.size - 1) {
+            val bearing1 = recent[i - 1].bearingTo(recent[i])
+            val bearing2 = recent[i].bearingTo(recent[i + 1])
+            val diff = Math.abs(bearing2 - bearing1)
+            val normalizedDiff = if (diff > 180) 360 - diff else diff
+            if (normalizedDiff > 90) sharpTurns++
+        }
+        return sharpTurns >= 4 // 4+ sharp turns in 10 readings = zigzag
     }
 
     private fun hasSpeedAnomaly(): Boolean {
-        // Mock > 80km/h
-        return false
+        val history = synchronized(locationHistory) { locationHistory.toList() }
+        if (history.size < 2) return false
+        val recent = history.takeLast(5)
+        return recent.any { it.hasSpeed() && it.speed > 22.2f } // > 80 km/h
     }
 
     private fun isNightTime(): Boolean {
-        // Mock 10pm to 6am
-        return false
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        return hour >= 22 || hour < 6
     }
 
-    private fun inDangerZone(): Boolean {
-        // Mock checking against GeofenceZoneEntities
-        return false
+    private suspend fun inDangerZone(): Boolean {
+        val currentLocation = synchronized(locationHistory) { locationHistory.lastOrNull() } ?: return false
+        val zones = geofenceZoneDao.getActiveZones().first()
+        return zones.any { zone ->
+            val results = FloatArray(1)
+            Location.distanceBetween(
+                currentLocation.latitude, currentLocation.longitude,
+                zone.latitude, zone.longitude, results
+            )
+            results[0] < zone.radius
+        }
+    }
+
+    private fun triggerSOS() {
+        sosManager.activateSOS { _, _, _, _, _ -> }
     }
 
     private fun showCheckInPrompt() {
@@ -115,15 +225,11 @@ class InactivityMonitorService : Service() {
         startActivity(intent)
     }
 
-    private fun triggerSOS() {
-        // Alert emergency contacts directly
-    }
-
     private fun createNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Tourist Safety Active")
-            .setContentText("Monitoring your safety \uD83D\uDEE1\uFE0F")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentText("Monitoring your safety 🛡️")
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setOngoing(true)
             .build()
     }
@@ -144,6 +250,16 @@ class InactivityMonitorService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        serviceJob.cancel()
+        try {
+            sensorManager.unregisterListener(sensorListener)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unregistering sensor listener", e)
+        }
+        try {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error removing location updates", e)
+        }
+        serviceScope.cancel()
     }
 }

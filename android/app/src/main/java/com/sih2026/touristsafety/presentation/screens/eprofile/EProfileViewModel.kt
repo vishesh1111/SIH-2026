@@ -71,6 +71,17 @@ class EProfileViewModel @Inject constructor(
         }
     }
 
+    fun updateProfilePhoto(photoUrl: String) {
+        viewModelScope.launch {
+            val currentProfile = _profile.value ?: return@launch
+            val updatedProfile = currentProfile.copy(
+                profilePhotoUrl = photoUrl
+            )
+            profileDao.insertProfile(updatedProfile)
+            _profile.value = updatedProfile
+        }
+    }
+
     fun loadDocuments() {
         viewModelScope.launch {
             _isLoading.value = true

@@ -7,7 +7,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -35,11 +34,6 @@ fun OnboardingScreen(navController: NavController) {
             title = "Instant SOS",
             description = "Trigger an emergency response with a single tap. We'll automatically share your location with authorities and emergency contacts.",
             icon = Icons.Default.Warning
-        ),
-        OnboardingPageData(
-            title = "AI-Powered Assistant",
-            description = "Get instant help with translations, local guidelines, and immediate support through our smart chatbot.",
-            icon = Icons.Default.AutoAwesome
         )
     )
 

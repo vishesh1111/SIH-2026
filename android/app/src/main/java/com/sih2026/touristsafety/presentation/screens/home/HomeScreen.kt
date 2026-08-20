@@ -1,7 +1,10 @@
 package com.sih2026.touristsafety.presentation.screens.home
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -15,17 +18,22 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocationOff
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import com.sih2026.touristsafety.presentation.components.BottomNavBar
 import com.sih2026.touristsafety.presentation.components.SOSButton
@@ -35,6 +43,135 @@ import com.sih2026.touristsafety.presentation.navigation.Screen
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController) {
+    val context = LocalContext.current
+
+    // =========================================================================
+    // Permission Handling & System Service Checks
+    // =========================================================================
+    var showLocationRationale by remember { mutableStateOf(false) }
+    var showMicRationale by remember { mutableStateOf(false) }
+    var isLocationServiceEnabled by remember { mutableStateOf(true) }
+    
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+    val requiredPermissions = arrayOf(
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+        Manifest.permission.RECORD_AUDIO
+    )
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val locationGranted = results[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                results[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        val micGranted = results[Manifest.permission.RECORD_AUDIO] == true
+
+        showLocationRationale = !locationGranted
+        showMicRationale = !micGranted
+    }
+
+    // Re-check permissions and services every time the screen resumes
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                val locationGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                val micGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                
+                if (!locationGranted || !micGranted) {
+                    permissionLauncher.launch(requiredPermissions)
+                }
+
+                val locationManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager
+                isLocationServiceEnabled = locationManager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) ||
+                                           locationManager.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // 1. Check if GPS is off at system level
+    if (!isLocationServiceEnabled) {
+        AlertDialog(
+            onDismissRequest = { /* Force action */ },
+            icon = { Icon(Icons.Default.LocationOff, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("Location Services Disabled") },
+            text = { Text("Your device's location (GPS) is turned off. TouristSafety requires location services to keep you safe and provide accurate maps. Please enable it in Settings.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                }) { Text("Turn On") }
+            },
+            dismissButton = {
+                TextButton(onClick = { isLocationServiceEnabled = true }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // 2. Permission rationales (if GPS is on but permission denied)
+    if (showLocationRationale && isLocationServiceEnabled) {
+        AlertDialog(
+            onDismissRequest = { showLocationRationale = false },
+            icon = { Icon(Icons.Default.LocationOff, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("Location Permission Required") },
+            text = {
+                Text(
+                    "Location access is critical for your safety:\n\n" +
+                    "• SOS alerts include your GPS coordinates\n" +
+                    "• Geofencing warns you about danger zones\n" +
+                    "• Inactivity monitoring detects if you're stationary too long\n\n" +
+                    "Please allow location permissions in App Settings.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showLocationRationale = false
+                    val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = android.net.Uri.fromParts("package", context.packageName, null)
+                    }
+                    context.startActivity(intent)
+                }) { Text("Open Settings") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLocationRationale = false }) { Text("Later") }
+            }
+        )
+    }
+
+    if (showMicRationale) {
+        AlertDialog(
+            onDismissRequest = { showMicRationale = false },
+            icon = { Icon(Icons.Default.MicOff, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("Microphone Access Required") },
+            text = {
+                Text(
+                    "Microphone access enables safety features:\n\n" +
+                    "• SOS audio recording captures evidence\n" +
+                    "• Scream detection triggers automatic alerts\n\n" +
+                    "Please enable microphone permissions, and ensure the global microphone toggle is on in your device's Quick Settings.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showMicRationale = false
+                    val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = android.net.Uri.fromParts("package", context.packageName, null)
+                    }
+                    context.startActivity(intent)
+                }) { Text("Open Settings") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMicRationale = false }) { Text("Later") }
+            }
+        )
+    }
+
+    // =========================================================================
+    // Main UI (unchanged)
+    // =========================================================================
     Scaffold(
         bottomBar = {
             BottomNavBar(
@@ -60,7 +197,6 @@ fun HomeScreen(navController: NavController) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
@@ -76,15 +212,6 @@ fun HomeScreen(navController: NavController) {
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                     )
                 }
-                Icon(
-                    imageVector = Icons.Default.AccountCircle,
-                    contentDescription = "Profile",
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .bounceClick { navController.navigate(Screen.EProfile.route) },
-                    tint = MaterialTheme.colorScheme.primary
-                )
             }
 
             // SOS Button Section
