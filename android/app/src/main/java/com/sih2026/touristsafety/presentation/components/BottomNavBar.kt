@@ -1,7 +1,6 @@
 package com.sih2026.touristsafety.presentation.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,10 +12,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -42,21 +41,21 @@ fun BottomNavBar(
         // Layer 1: The standard Navigation Bar (5 items)
         NavigationBar(
             modifier = Modifier.fillMaxWidth().shadow(elevation = 8.dp),
-            containerColor = Color.White
+            containerColor = MaterialTheme.colorScheme.surface
         ) {
             NavigationBarItem(
                 selected = currentRoute == Screen.Home.route,
                 onClick = { onNavigate(Screen.Home.route) },
                 icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
                 label = { Text("Home") },
-                colors = NavigationBarItemDefaults.colors(indicatorColor = Color(0xFFE3F2FD))
+                colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.secondaryContainer)
             )
             NavigationBarItem(
                 selected = currentRoute == Screen.Map.route,
                 onClick = { onNavigate(Screen.Map.route) },
                 icon = { Icon(Icons.Default.Map, contentDescription = "Map") },
                 label = { Text("Map") },
-                colors = NavigationBarItemDefaults.colors(indicatorColor = Color(0xFFE3F2FD))
+                colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.secondaryContainer)
             )
             // Empty placeholder for SOS to maintain perfect 5-item spacing
             NavigationBarItem(
@@ -72,14 +71,14 @@ fun BottomNavBar(
                 onClick = { onNavigate(Screen.DisasterAlerts.route) },
                 icon = { Icon(Icons.Default.Notifications, contentDescription = "Alerts") },
                 label = { Text("Alerts") },
-                colors = NavigationBarItemDefaults.colors(indicatorColor = Color(0xFFE3F2FD))
+                colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.secondaryContainer)
             )
             NavigationBarItem(
                 selected = currentRoute == Screen.WomenSafety.route,
                 onClick = { onNavigate(Screen.WomenSafety.route) },
                 icon = { Icon(Icons.Default.Shield, contentDescription = "Safety") },
                 label = { Text("Safety") },
-                colors = NavigationBarItemDefaults.colors(indicatorColor = Color(0xFFE3F2FD))
+                colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.secondaryContainer)
             )
         }
 
@@ -104,7 +103,7 @@ fun BottomNavBar(
                     modifier = Modifier
                         .size(64.dp)
                         .shadow(elevation = 6.dp, shape = CircleShape)
-                        .background(Color.White, CircleShape)
+                        .background(MaterialTheme.colorScheme.surface, CircleShape)
                         .padding(4.dp)
                         .clip(CircleShape)
                         .background(Color(0xFFD32F2F))

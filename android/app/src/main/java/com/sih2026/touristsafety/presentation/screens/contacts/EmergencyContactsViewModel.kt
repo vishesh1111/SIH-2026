@@ -3,7 +3,9 @@ package com.sih2026.touristsafety.presentation.screens.contacts
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sih2026.touristsafety.data.local.dao.EmergencyContactDao
+import com.sih2026.touristsafety.data.local.dao.ProfileDao
 import com.sih2026.touristsafety.data.local.entities.EmergencyContactEntity
+import com.sih2026.touristsafety.data.remote.SupabaseManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -14,13 +16,12 @@ import javax.inject.Inject
 
 @HiltViewModel
 class EmergencyContactsViewModel @Inject constructor(
-    private val contactDao: EmergencyContactDao
+    private val contactDao: EmergencyContactDao,
+    private val profileDao: ProfileDao,
+    private val supabaseManager: SupabaseManager
 ) : ViewModel() {
 
-    // Using a dummy user ID for now
-    private val userId = "default_user"
-
-    val contacts: StateFlow<List<EmergencyContactEntity>> = contactDao.getContactsForUser(userId)
+    val contacts: StateFlow<List<EmergencyContactEntity>> = contactDao.getAllContacts()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun addContact(
@@ -32,8 +33,12 @@ class EmergencyContactsViewModel @Inject constructor(
         isPrimary: Boolean
     ) {
         viewModelScope.launch {
+            val currentProfile = profileDao.getCurrentProfile()
+            val userId = currentProfile?.id ?: UUID.randomUUID().toString()
+            val contactId = UUID.randomUUID().toString()
+
             val contact = EmergencyContactEntity(
-                id = UUID.randomUUID().toString(),
+                id = contactId,
                 userId = userId,
                 name = name,
                 phone = phone,
@@ -42,7 +47,20 @@ class EmergencyContactsViewModel @Inject constructor(
                 residentAddress = residentAddress,
                 isPrimary = isPrimary
             )
+            // Save locally
             contactDao.insertContact(contact)
+
+            // Sync to Supabase
+            supabaseManager.insertEmergencyContact(
+                id = contactId,
+                userId = userId,
+                name = name,
+                phone = phone,
+                relationship = relationship,
+                countryCode = countryCode,
+                residentAddress = residentAddress,
+                isPrimary = isPrimary
+            )
         }
     }
 

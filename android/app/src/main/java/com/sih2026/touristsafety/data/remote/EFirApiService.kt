@@ -19,10 +19,4 @@ data class StructuredFir(
     val complainantDetails: String
 )
 
-interface EFirApiService {
-    @POST("efir/generate")
-    suspend fun generateFir(@Body request: FirRequest): Response<StructuredFir>
 
-    @POST("efir/pdf")
-    suspend fun downloadPdf(@Body fir: StructuredFir): Response<ResponseBody>
-}

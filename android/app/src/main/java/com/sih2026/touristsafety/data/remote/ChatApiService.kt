@@ -25,7 +25,4 @@ data class ChatResponse(
     val action_buttons: List<ActionButton>
 )
 
-interface ChatApiService {
-    @POST("api/chat/")
-    suspend fun sendMessage(@Body request: ChatRequest): Response<ChatResponse>
-}
+

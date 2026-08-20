@@ -13,6 +13,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.QrCode
+import androidx.compose.material.icons.filled.Flight
+import androidx.compose.material.icons.filled.Hotel
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.Article
+import androidx.compose.material.icons.filled.Book
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,7 +41,7 @@ import coil.compose.AsyncImage
 @Composable
 fun EProfileScreen(
     onNavigateBack: () -> Unit,
-    onNavigateToUpload: () -> Unit,
+    onNavigateToUpload: (String?) -> Unit,
     onNavigateToDetail: (String) -> Unit,
     viewModel: EProfileViewModel = hiltViewModel()
 ) {
@@ -74,7 +80,7 @@ fun EProfileScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onNavigateToUpload) {
+            FloatingActionButton(onClick = { onNavigateToUpload(null) }) {
                 Icon(Icons.Default.Add, contentDescription = "Add Document")
             }
         }
@@ -158,12 +164,12 @@ fun EProfileScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 val categories = listOf(
-                    "Passport" to "📘",
-                    "Visa" to "📝",
-                    "Flight Tickets" to "✈️",
-                    "Hotel Bookings" to "🏨",
-                    "Travel Insurance" to "🛡️",
-                    "ID Cards" to "🆔"
+                    "Passport" to Icons.Default.Book,
+                    "Visa" to Icons.Default.Article,
+                    "Flight Tickets" to Icons.Default.Flight,
+                    "Hotel Bookings" to Icons.Default.Hotel,
+                    "Travel Insurance" to Icons.Default.Shield,
+                    "ID Cards" to Icons.Default.Badge
                 )
 
                 LazyVerticalGrid(
@@ -181,7 +187,7 @@ fun EProfileScreen(
                                 .aspectRatio(1f)
                                 .clickable {
                                     if (count == 0) {
-                                        onNavigateToUpload()
+                                        onNavigateToUpload(catName)
                                     } else {
                                         // Show list of documents or navigate to detail
                                         if (count == 1) {
@@ -200,8 +206,13 @@ fun EProfileScreen(
                                 verticalArrangement = Arrangement.Center,
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text(text = icon, style = MaterialTheme.typography.displaySmall)
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = catName,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
                                 Text(text = catName, fontWeight = FontWeight.SemiBold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                                 Text(text = "$count documents", style = MaterialTheme.typography.bodySmall)
                             }

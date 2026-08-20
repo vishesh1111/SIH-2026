@@ -1,5 +1,6 @@
 package com.sih2026.touristsafety.presentation.screens.auth
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -18,27 +19,35 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.sih2026.touristsafety.presentation.navigation.Screen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SignupScreen(navController: NavController) {
+fun SignupScreen(
+    navController: NavController,
+    viewModel: SignupViewModel = hiltViewModel()
+) {
     var fullName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
+    var codeExpanded by remember { mutableStateOf(false) }
     var selectedNationality by remember { mutableStateOf("Select Nationality") }
+    var selectedCountryCode by remember { mutableStateOf("+91") }
     
     val genders = listOf("Male", "Female", "Other")
     var selectedGenderIndex by remember { mutableStateOf(0) }
 
     val nationalities = listOf("India", "USA", "UK", "Australia", "Canada", "Germany", "France", "Japan")
+    val countryCodes = listOf("+91", "+1", "+44", "+61", "+81", "+49", "+33")
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
             .padding(24.dp)
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -49,7 +58,7 @@ fun SignupScreen(navController: NavController) {
             text = "Create Account",
             style = MaterialTheme.typography.displaySmall,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.onBackground
         )
         Text(
             text = "Join Tourist Safety",
@@ -81,20 +90,42 @@ fun SignupScreen(navController: NavController) {
         Spacer(modifier = Modifier.height(16.dp))
 
         Row(modifier = Modifier.fillMaxWidth()) {
-            OutlinedTextField(
-                value = "+91",
-                onValueChange = { },
-                readOnly = true,
-                modifier = Modifier.weight(0.25f),
-                label = { Text("Code") }
-            )
+            ExposedDropdownMenuBox(
+                expanded = codeExpanded,
+                onExpandedChange = { codeExpanded = it },
+                modifier = Modifier.weight(0.3f)
+            ) {
+                OutlinedTextField(
+                    value = selectedCountryCode,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Code") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = codeExpanded) },
+                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                    modifier = Modifier.menuAnchor().fillMaxWidth()
+                )
+                ExposedDropdownMenu(
+                    expanded = codeExpanded,
+                    onDismissRequest = { codeExpanded = false }
+                ) {
+                    countryCodes.forEach { code ->
+                        DropdownMenuItem(
+                            text = { Text(code) },
+                            onClick = {
+                                selectedCountryCode = code
+                                codeExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
             Spacer(modifier = Modifier.width(8.dp))
             OutlinedTextField(
                 value = phone,
                 onValueChange = { phone = it },
                 label = { Text("Phone Number") },
                 leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
-                modifier = Modifier.weight(0.75f),
+                modifier = Modifier.weight(0.7f),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
             )
         }
@@ -174,7 +205,19 @@ fun SignupScreen(navController: NavController) {
         Spacer(modifier = Modifier.height(32.dp))
 
         Button(
-            onClick = { navController.navigate(Screen.EmergencyContacts.route) },
+            onClick = {
+                viewModel.saveProfile(
+                    fullName = fullName,
+                    email = email,
+                    phone = "$selectedCountryCode $phone",
+                    nationality = selectedNationality,
+                    gender = genders[selectedGenderIndex],
+                    password = password,
+                    onSuccess = {
+                        navController.navigate(Screen.EmergencyContacts.route)
+                    }
+                )
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp)

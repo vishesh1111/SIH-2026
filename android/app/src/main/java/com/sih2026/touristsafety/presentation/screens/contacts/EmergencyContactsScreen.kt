@@ -25,7 +25,8 @@ fun EmergencyContactsScreen(
 ) {
     val contacts by viewModel.contacts.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
-    var showAddSheet by remember { mutableStateOf(false) }
+    var showSheet by remember { mutableStateOf(false) }
+    var editingContact by remember { mutableStateOf<EmergencyContactEntity?>(null) }
 
     Scaffold(
         topBar = {
@@ -34,7 +35,10 @@ fun EmergencyContactsScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddSheet = true }) {
+            FloatingActionButton(onClick = {
+                editingContact = null
+                showSheet = true 
+            }) {
                 Icon(Icons.Default.Add, contentDescription = "Add Contact")
             }
         },
@@ -75,18 +79,35 @@ fun EmergencyContactsScreen(
                     ContactCard(
                         contact = contact,
                         onDelete = { viewModel.deleteContact(contact.id) },
-                        onClick = { android.widget.Toast.makeText(context, "Edit coming soon", android.widget.Toast.LENGTH_SHORT).show() }
+                        onClick = { 
+                            editingContact = contact
+                            showSheet = true 
+                        }
                     )
                 }
             }
         }
 
-        if (showAddSheet) {
-            AddContactBottomSheet(
-                onDismiss = { showAddSheet = false },
-                onAdd = { name, phone, rel, code, addr, isPrimary ->
-                    viewModel.addContact(name, phone, rel, code, addr, isPrimary)
-                    showAddSheet = false
+        if (showSheet) {
+            ContactBottomSheet(
+                initialContact = editingContact,
+                onDismiss = { showSheet = false },
+                onSave = { name, phone, rel, code, addr, isPrimary ->
+                    if (editingContact != null) {
+                        viewModel.updateContact(
+                            editingContact!!.copy(
+                                name = name,
+                                phone = phone,
+                                relationship = rel,
+                                countryCode = code,
+                                residentAddress = addr,
+                                isPrimary = isPrimary
+                            )
+                        )
+                    } else {
+                        viewModel.addContact(name, phone, rel, code, addr, isPrimary)
+                    }
+                    showSheet = false
                 }
             )
         }
@@ -144,16 +165,17 @@ fun ContactCard(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddContactBottomSheet(
+fun ContactBottomSheet(
+    initialContact: EmergencyContactEntity? = null,
     onDismiss: () -> Unit,
-    onAdd: (String, String, String, String, String?, Boolean) -> Unit
+    onSave: (String, String, String, String, String?, Boolean) -> Unit
 ) {
-    var name by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }
-    var relationship by remember { mutableStateOf("") }
-    var countryCode by remember { mutableStateOf("+91") }
-    var address by remember { mutableStateOf("") }
-    var isPrimary by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf(initialContact?.name ?: "") }
+    var phone by remember { mutableStateOf(initialContact?.phone ?: "") }
+    var relationship by remember { mutableStateOf(initialContact?.relationship ?: "") }
+    var countryCode by remember { mutableStateOf(initialContact?.countryCode ?: "+91") }
+    var address by remember { mutableStateOf(initialContact?.residentAddress ?: "") }
+    var isPrimary by remember { mutableStateOf(initialContact?.isPrimary ?: false) }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -161,7 +183,7 @@ fun AddContactBottomSheet(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            Text("Add Emergency Contact", style = MaterialTheme.typography.titleLarge)
+            Text(if (initialContact == null) "Add Emergency Contact" else "Edit Emergency Contact", style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(16.dp))
             
             OutlinedTextField(
@@ -215,13 +237,13 @@ fun AddContactBottomSheet(
             Button(
                 onClick = {
                     if (name.isNotBlank() && phone.isNotBlank()) {
-                        onAdd(name, phone, relationship, countryCode, address.takeIf { it.isNotBlank() }, isPrimary)
+                        onSave(name, phone, relationship, countryCode, address.takeIf { it.isNotBlank() }, isPrimary)
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = name.isNotBlank() && phone.isNotBlank()
             ) {
-                Text("Save Contact")
+                Text(if (initialContact == null) "Save Contact" else "Update Contact")
             }
             Spacer(modifier = Modifier.height(32.dp))
         }

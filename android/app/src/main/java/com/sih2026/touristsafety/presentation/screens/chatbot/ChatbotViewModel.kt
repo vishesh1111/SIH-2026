@@ -3,7 +3,7 @@ package com.sih2026.touristsafety.presentation.screens.chatbot
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sih2026.touristsafety.data.remote.ActionButton
-import com.sih2026.touristsafety.data.remote.ChatApiService
+
 import com.sih2026.touristsafety.data.remote.ChatRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,9 +23,7 @@ data class ChatMessage(
 )
 
 @HiltViewModel
-class ChatbotViewModel @Inject constructor(
-    private val chatApiService: ChatApiService
-) : ViewModel() {
+class ChatbotViewModel @Inject constructor() : ViewModel() {
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
@@ -93,7 +91,7 @@ class ChatbotViewModel @Inject constructor(
                     val requestBodyJson = org.json.JSONObject()
                     requestBodyJson.put("contents", contentsArray)
 
-                    val apiKey = com.sih2026.touristsafety.BuildConfig.GEMINI_API_KEY
+                    val apiKey = com.sih2026.touristsafety.utils.GeminiApiKeys.getNextKey()
                     val urlStr = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=$apiKey"
                     val url = java.net.URL(urlStr)
                     val connection = url.openConnection() as java.net.HttpURLConnection

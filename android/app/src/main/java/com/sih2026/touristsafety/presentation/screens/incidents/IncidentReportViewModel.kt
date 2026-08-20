@@ -46,7 +46,7 @@ class IncidentReportViewModel @Inject constructor(
 
     private val generativeModel = GenerativeModel(
         modelName = "gemini-3.6-flash",
-        apiKey = "AIzaSyBeDL3mtJdBDj3xzUvt_GUiNC5BxIJLJZw"
+        apiKey = com.sih2026.touristsafety.utils.GeminiApiKeys.getNextKey()
     )
 
     fun nextStep() {
@@ -145,7 +145,7 @@ class IncidentReportViewModel @Inject constructor(
                     val requestBodyJson = org.json.JSONObject()
                     requestBodyJson.put("contents", contentsArray)
 
-                    val apiKey = com.sih2026.touristsafety.BuildConfig.GEMINI_API_KEY
+                    val apiKey = com.sih2026.touristsafety.utils.GeminiApiKeys.getNextKey()
                     val urlStr = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
                     
                     val url = java.net.URL(urlStr)

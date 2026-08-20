@@ -29,11 +29,4 @@ data class IncidentResponse(
     val message: String
 )
 
-interface IncidentApiService {
-    @Multipart
-    @POST("incidents/analyze-image")
-    suspend fun analyzeImage(@Part image: MultipartBody.Part): Response<AIAnalysisResult>
 
-    @POST("incidents")
-    suspend fun submitIncident(@Body incident: IncidentDto): Response<IncidentResponse>
-}

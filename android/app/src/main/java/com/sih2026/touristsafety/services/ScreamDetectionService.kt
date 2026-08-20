@@ -36,6 +36,9 @@ class ScreamDetectionService : Service() {
         
         private val _activeSpeakerGender = MutableSharedFlow<String?>(replay = 1)
         val activeSpeakerGender = _activeSpeakerGender.asSharedFlow()
+        
+        private val _audioAmplitude = MutableSharedFlow<Float>(replay = 1)
+        val audioAmplitude = _audioAmplitude.asSharedFlow()
     }
 
     private val job = SupervisorJob()
@@ -49,6 +52,11 @@ class ScreamDetectionService : Service() {
         AudioFormat.CHANNEL_IN_MONO,
         AudioFormat.ENCODING_PCM_16BIT
     )
+
+    override fun onCreate() {
+        super.onCreate()
+        MLModelManager.initialize(this)
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -78,16 +86,38 @@ class ScreamDetectionService : Service() {
             audioRecord?.startRecording()
             
             scope.launch {
-                val buffer = ShortArray(sampleRate * 5) // 5 seconds
+                val chunk = ShortArray(sampleRate / 10) // 100ms chunk
+                val rollingBuffer = ShortArray(sampleRate * 3) // 3 seconds context
+                var bufferIndex = 0
+                var chunksRead = 0
+
                 while (isRecording) {
-                    var readSize = 0
-                    while (readSize < buffer.size && isRecording) {
-                        val read = audioRecord?.read(buffer, readSize, buffer.size - readSize) ?: 0
-                        if (read > 0) readSize += read
-                    }
-                    
-                    if (readSize == buffer.size) {
-                        processAudio(buffer)
+                    val read = audioRecord?.read(chunk, 0, chunk.size) ?: 0
+                    if (read > 0) {
+                        // Calculate amplitude for UI
+                        var maxAmp = 0
+                        for (i in 0 until read) {
+                            val absVal = Math.abs(chunk[i].toInt())
+                            if (absVal > maxAmp) maxAmp = absVal
+                        }
+                        _audioAmplitude.emit(maxAmp / 32768f)
+
+                        // Append to rolling buffer
+                        if (bufferIndex + read <= rollingBuffer.size) {
+                            System.arraycopy(chunk, 0, rollingBuffer, bufferIndex, read)
+                            bufferIndex += read
+                        } else {
+                            System.arraycopy(rollingBuffer, read, rollingBuffer, 0, rollingBuffer.size - read)
+                            System.arraycopy(chunk, 0, rollingBuffer, rollingBuffer.size - read, read)
+                            bufferIndex = rollingBuffer.size
+                        }
+
+                        chunksRead++
+                        // Process ML every ~1 second (10 chunks of 100ms)
+                        if (chunksRead >= 10 && bufferIndex >= rollingBuffer.size) {
+                            processAudio(rollingBuffer)
+                            chunksRead = 0
+                        }
                     }
                 }
             }
@@ -101,51 +131,61 @@ class ScreamDetectionService : Service() {
         // VAD
         if (!AudioProcessor.isVoiceDetected(audioData, sampleRate)) {
             _activeSpeakerGender.emit(null)
+            _threatLevel.emit(ThreatLevel.LOW)
             return
         }
         
         // Extract Features
         val mfccs = AudioProcessor.extractMFCCs(audioData, sampleRate)
-        
-        // Phase 1: Noise vs Human
-        val phase1Result = MLModelManager.runScreamPhase1Inference(null, mfccs)
-        if (phase1Result != 2) {
-            _activeSpeakerGender.emit(null)
-            return // Noise
-        }
-        
-        // Phase 2: Scream vs Speech
-        val phase2Result = MLModelManager.runScreamPhase2Inference(null, mfccs)
-        val isScream = phase2Result == 1
-        
-        // Gender & Distress
         val melSpecs = AudioProcessor.extractMelSpectrogram(audioData, sampleRate)
-        val maleProb = MLModelManager.runGenderInference(null, melSpecs)
-        val gender = if (maleProb > 0.5f) "male" else "female"
         
+        // Gender Inference using Pitch (more reliable than broken .h5 model)
+        val pitch = AudioProcessor.estimatePitch(audioData, sampleRate)
+        val maleProb = MLModelManager.runGenderInference(null, melSpecs)
+        
+        // If pitch is extremely high or low (not human speech), rely on ML fallback. Otherwise pitch is king.
+        val gender = if (pitch > 60f && pitch < 165f) {
+            "male"
+        } else if (pitch >= 165f && pitch < 300f) {
+            "female"
+        } else {
+            if (maleProb > 0.5f) "male" else "female"
+        }
         _activeSpeakerGender.emit(gender)
         
-        val distressProb = MLModelManager.runDistressInference(null, FloatArray(0)) // mock input
+        // Distress Inference (Requires exactly 13248 float samples)
+        val distressInput = FloatArray(13248) { i ->
+            if (i < audioData.size) audioData[i] / 32768f else 0f
+        }
+        val distressProb = MLModelManager.runDistressInference(null, distressInput)
         
-        // Threat Assessment
-        val assessment = ThreatAssessor.assessThreat(
-            screamDetected = isScream,
-            gender = gender,
-            distressLevel = distressProb,
-            isNight = false, // mock
-            isDangerZone = false // mock
-        )
+        // Threat Assessment strictly based on input voice volume as requested
+        var maxAmp = 0f
+        for (sample in audioData) {
+            val abs = Math.abs(sample.toInt())
+            if (abs > maxAmp) maxAmp = abs.toFloat()
+        }
+        val volumeLevel = maxAmp / 32768f
+        
+        val newThreatLevel = when {
+            volumeLevel > 0.7f -> ThreatLevel.CRITICAL
+            volumeLevel > 0.4f -> ThreatLevel.HIGH
+            volumeLevel > 0.15f -> ThreatLevel.MEDIUM
+            else -> ThreatLevel.LOW
+        }
+        
+        val isScream = volumeLevel > 0.7f
         
         // Emit events
         if (isScream) {
             _events.emit(DetectionEvent(
                 System.currentTimeMillis(),
                 "Scream Detected",
-                "Gender: $gender, Distress: ${(distressProb * 100).toInt()}%",
-                assessment.score
+                "Gender: $gender, Volume: ${(volumeLevel * 100).toInt()}%",
+                100
             ))
         }
-        _threatLevel.emit(assessment.level)
+        _threatLevel.emit(newThreatLevel)
     }
 
     private fun stopMonitoring() {

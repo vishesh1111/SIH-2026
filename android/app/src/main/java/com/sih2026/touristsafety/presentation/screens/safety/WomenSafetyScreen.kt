@@ -119,7 +119,8 @@ fun WomenSafetyScreen(
                     
                     if (isEnabled) {
                         Spacer(modifier = Modifier.height(16.dp))
-                        WaveformAnimation(color = threatColor)
+                        val currentAmplitude by viewModel.audioAmplitude.collectAsState()
+                        WaveformAnimation(color = threatColor, amplitude = currentAmplitude)
                     }
                 }
             }
@@ -180,31 +181,32 @@ fun WomenSafetyScreen(
 }
 
 @Composable
-fun WaveformAnimation(color: Color) {
-    val infiniteTransition = rememberInfiniteTransition()
-    val scales = List(5) { i ->
-        infiniteTransition.animateFloat(
-            initialValue = 0.2f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(500, delayMillis = i * 100),
-                repeatMode = RepeatMode.Reverse
-            )
-        )
-    }
+fun WaveformAnimation(color: Color, amplitude: Float) {
+    // Scale the amplitude up by 5x so the pulses are highly visible and vertical
+    val scaledAmplitude = (amplitude * 5f).coerceIn(0.1f, 1f)
+    
+    // Smooth out the incoming amplitude
+    val animatedAmplitude by animateFloatAsState(
+        targetValue = scaledAmplitude,
+        animationSpec = tween(150),
+        label = "AmplitudeAnimation"
+    )
+
+    // Apply pseudo-random heights based on the single amplitude
+    val multipliers = listOf(0.6f, 1.0f, 0.8f, 0.5f, 0.9f)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(40.dp),
+            .height(64.dp), // Increased height for more vertical pulses
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        scales.forEach { scale ->
+        multipliers.forEach { mult ->
             Box(
                 modifier = Modifier
-                    .width(4.dp)
-                    .fillMaxHeight(scale.value)
+                    .width(6.dp) // Slightly thicker
+                    .fillMaxHeight(animatedAmplitude * mult)
                     .background(color)
             )
         }

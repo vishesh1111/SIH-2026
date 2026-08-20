@@ -74,15 +74,26 @@ fun DocumentDetailScreen(
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Document Image placeholder
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(250.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text("Document Image securely stored offline")
+                if (currentDoc!!.fileUrl.isNotBlank()) {
+                    coil.compose.AsyncImage(
+                        model = java.io.File(currentDoc!!.fileUrl),
+                        contentDescription = "Document Image",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(250.dp),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    // Document Image placeholder
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(250.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("Document Image securely stored offline")
+                        }
                     }
                 }
                 
@@ -96,8 +107,6 @@ fun DocumentDetailScreen(
                         
                         val expiryText = currentDoc!!.metadata ?: "N/A"
                         Text("Expiry: $expiryText", style = MaterialTheme.typography.bodyLarge)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("Status: ${currentDoc!!.verificationStatus}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyLarge)
                     }
                 }
 

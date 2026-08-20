@@ -230,7 +230,7 @@ fun HomeScreen(navController: NavController) {
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showEmergencyDialog = true },
-                containerColor = MaterialTheme.colorScheme.error,
+                containerColor = Color(0xFFD32F2F),
                 shape = CircleShape
             ) {
                 Icon(Icons.Default.Call, contentDescription = "Emergency Call", tint = Color.White)

@@ -37,6 +37,9 @@ class WomenSafetyViewModel @Inject constructor(
     private val _activeSpeakerGender = MutableStateFlow<String?>(null)
     val activeSpeakerGender: StateFlow<String?> = _activeSpeakerGender.asStateFlow()
 
+    private val _audioAmplitude = MutableStateFlow(0f)
+    val audioAmplitude: StateFlow<Float> = _audioAmplitude.asStateFlow()
+
     init {
         // Collect events from the service
         viewModelScope.launch {
@@ -56,6 +59,12 @@ class WomenSafetyViewModel @Inject constructor(
         viewModelScope.launch {
             ScreamDetectionService.activeSpeakerGender.collect { gender ->
                 _activeSpeakerGender.value = gender
+            }
+        }
+
+        viewModelScope.launch {
+            ScreamDetectionService.audioAmplitude.collect { amp ->
+                _audioAmplitude.value = amp
             }
         }
     }

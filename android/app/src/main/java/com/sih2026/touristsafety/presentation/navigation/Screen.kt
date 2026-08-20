@@ -8,7 +8,9 @@ sealed class Screen(val route: String) {
     object SOS : Screen("sos")
     object Map : Screen("map")
     object EProfile : Screen("eprofile")
-    object DocumentUpload : Screen("document_upload")
+    object DocumentUpload : Screen("document_upload?category={category}") {
+        fun createRoute(category: String? = null) = if (category != null) "document_upload?category=$category" else "document_upload"
+    }
     object DocumentDetail : Screen("document_detail/{docId}") {
         fun createRoute(docId: String) = "document_detail/$docId"
     }

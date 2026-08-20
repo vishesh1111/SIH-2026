@@ -130,14 +130,25 @@ fun TouristSafetyNavHost(
         composable(Screen.EProfile.route) {
             EProfileScreen(
                 onNavigateBack = { navController.popBackStack() },
-                onNavigateToUpload = { navController.navigate(Screen.DocumentUpload.route) },
+                onNavigateToUpload = { category -> 
+                    navController.navigate(Screen.DocumentUpload.createRoute(category)) 
+                },
                 onNavigateToDetail = { docId ->
                     navController.navigate(Screen.DocumentDetail.createRoute(docId))
                 }
             )
         }
-        composable(Screen.DocumentUpload.route) {
+        composable(
+            route = Screen.DocumentUpload.route,
+            arguments = listOf(navArgument("category") { 
+                type = androidx.navigation.NavType.StringType 
+                nullable = true
+                defaultValue = null
+            })
+        ) { backStackEntry ->
+            val category = backStackEntry.arguments?.getString("category")
             DocumentUploadScreen(
+                initialCategory = category,
                 onNavigateBack = { navController.popBackStack() },
                 onSave = { navController.popBackStack() }
             )

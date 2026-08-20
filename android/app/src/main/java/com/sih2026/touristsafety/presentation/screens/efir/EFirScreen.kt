@@ -223,7 +223,7 @@ fun Step3AttachEvidence(
 @Composable
 fun Step4Submit(
     structuredFir: com.sih2026.touristsafety.data.remote.StructuredFir?,
-    onDownloadPdf: () -> Unit,
+    onDownloadPdf: (android.content.Context) -> Unit,
     getPolicePortalUrl: (String) -> String
 ) {
     val context = LocalContext.current
@@ -243,7 +243,7 @@ fun Step4Submit(
     }
     
     Spacer(modifier = Modifier.height(16.dp))
-    Button(onClick = onDownloadPdf, modifier = Modifier.fillMaxWidth()) {
+    Button(onClick = { onDownloadPdf(context) }, modifier = Modifier.fillMaxWidth()) {
         Text("Download as PDF")
     }
     

@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.maps.model.LatLng
 import com.sih2026.touristsafety.data.local.entities.GeofenceZoneEntity
-import com.sih2026.touristsafety.data.remote.PlacesApiService
+
 import com.sih2026.touristsafety.domain.model.NearbyPlace
 import com.sih2026.touristsafety.domain.model.TouristLocation
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,9 +22,7 @@ import javax.inject.Inject
 import com.sih2026.touristsafety.BuildConfig
 
 @HiltViewModel
-class TouristMapViewModel @Inject constructor(
-    private val placesApi: PlacesApiService
-) : ViewModel() {
+class TouristMapViewModel @Inject constructor() : ViewModel() {
 
     private val _userLocation = MutableStateFlow<LatLng?>(null)
     val userLocation: StateFlow<LatLng?> = _userLocation.asStateFlow()
@@ -44,10 +42,10 @@ class TouristMapViewModel @Inject constructor(
     private val _selectedTab = MutableStateFlow(0)
     val selectedTab: StateFlow<Int> = _selectedTab.asStateFlow()
 
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
-        .build()
+    private val generativeModel = com.google.ai.client.generativeai.GenerativeModel(
+        modelName = "gemini-3.6-flash",
+        apiKey = com.sih2026.touristsafety.utils.GeminiApiKeys.getNextKey()
+    )
 
     init {
         loadDangerZones()
@@ -67,8 +65,32 @@ class TouristMapViewModel @Inject constructor(
             val loc = _userLocation.value ?: return@launch
 
             try {
-                // 1. Try fetching from the existing Python/Gemini Backend
-                val places = placesApi.getNearbyPlaces(loc.latitude, loc.longitude)
+                // 1. Fetch from Gemini directly on device
+                val prompt = "Given the coordinates ${loc.latitude}, ${loc.longitude}, return a JSON array of up to 6 nearby emergency services (hospitals and police stations). Use keys: id, name, type ('hospital' or 'police'), latitude, longitude, distance, rating. Return ONLY valid JSON array without formatting."
+                
+                val response = withContext(Dispatchers.IO) {
+                    generativeModel.generateContent(prompt)
+                }
+                
+                val responseBody = response.text?.trim()?.removePrefix("```json")?.removeSuffix("```")?.trim() ?: "[]"
+                val jsonArray = org.json.JSONArray(responseBody)
+                val places = mutableListOf<NearbyPlace>()
+                
+                for (i in 0 until jsonArray.length()) {
+                    val obj = jsonArray.getJSONObject(i)
+                    places.add(
+                        NearbyPlace(
+                            id = obj.optString("id", java.util.UUID.randomUUID().toString()),
+                            name = obj.optString("name", "Unknown"),
+                            type = obj.optString("type", "hospital"),
+                            latitude = obj.optDouble("latitude", loc.latitude),
+                            longitude = obj.optDouble("longitude", loc.longitude),
+                            distance = obj.optDouble("distance", 0.0),
+                            rating = obj.optDouble("rating", 4.0).toFloat()
+                        )
+                    )
+                }
+
                 val emergencyOnly = places.filter { it.type == "hospital" || it.type == "police" }
                 
                 if (emergencyOnly.isNotEmpty()) {
@@ -79,7 +101,7 @@ class TouristMapViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                // 3. Fallback to local generation if backend is offline
+                // 3. Fallback to local generation if offline
                 _nearbyPlaces.value = generateLocalEmergencyServices(loc.latitude, loc.longitude)
             }
         }

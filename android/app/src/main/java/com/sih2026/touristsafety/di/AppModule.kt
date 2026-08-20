@@ -55,42 +55,6 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient {
-        val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
-        }
-        return OkHttpClient.Builder()
-            .addInterceptor(logging)
-            .connectTimeout(60, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(60, TimeUnit.SECONDS)
-            .build()
-    }
-
-    @Provides
-    @Singleton
-    fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
-        return Retrofit.Builder()
-            .baseUrl("http://192.168.1.41:8000/") // Local network IP for real devices
-            .client(okHttpClient)
-            .addConverterFactory(MoshiConverterFactory.create())
-            .build()
-    }
-
-    @Provides
-    @Singleton
-    fun provideChatApiService(retrofit: Retrofit): com.sih2026.touristsafety.data.remote.ChatApiService {
-        return retrofit.create(com.sih2026.touristsafety.data.remote.ChatApiService::class.java)
-    }
-
-    @Provides
-    @Singleton
-    fun providePlacesApiService(retrofit: Retrofit): com.sih2026.touristsafety.data.remote.PlacesApiService {
-        return retrofit.create(com.sih2026.touristsafety.data.remote.PlacesApiService::class.java)
-    }
-
-    @Provides
-    @Singleton
     fun provideDataStore(@ApplicationContext appContext: Context): DataStore<Preferences> {
         return appContext.dataStore
     }

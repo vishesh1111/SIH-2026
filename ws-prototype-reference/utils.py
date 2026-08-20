@@ -94,10 +94,10 @@ def create_model2(vector_length=128):
     file.close()
     total_number_of_column_required_for_prediction = data2
     model = Sequential()
-    model.add(Dense(64, input_dim=total_number_of_column_required_for_prediction, activation='relu'))
-    model.add(Dense(32, activation='relu'))
-    model.add(Dense(16, activation='relu'))
+    model.add(Dense(12, input_dim=total_number_of_column_required_for_prediction, activation='relu'))
     model.add(Dense(8, activation='relu'))
-    #model.add(Dense(3, activation='relu'))
+    model.add(Dense(10, activation='relu'))
+    model.add(Dense(5, activation='relu'))
+    model.add(Dense(3, activation='relu'))
     model.add(Dense(1, activation='sigmoid'))
     return model

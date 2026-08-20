@@ -13,4 +13,13 @@ interface ProfileDao {
 
     @Query("SELECT * FROM profiles WHERE id = :id")
     suspend fun getProfile(id: String): ProfileEntity?
+
+    @Query("SELECT * FROM profiles WHERE email = :email LIMIT 1")
+    suspend fun getProfileByEmail(email: String): ProfileEntity?
+
+    @Query("SELECT * FROM profiles ORDER BY createdAt DESC LIMIT 1")
+    suspend fun getCurrentProfile(): ProfileEntity?
+
+    @Query("SELECT * FROM profiles ORDER BY createdAt DESC LIMIT 1")
+    fun getCurrentProfileFlow(): kotlinx.coroutines.flow.Flow<ProfileEntity?>
 }
