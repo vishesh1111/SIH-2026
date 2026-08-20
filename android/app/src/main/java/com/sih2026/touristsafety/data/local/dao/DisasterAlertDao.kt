@@ -23,4 +23,7 @@ interface DisasterAlertDao {
 
     @Query("SELECT * FROM disaster_alerts WHERE hazardType = :type ORDER BY createdAt DESC")
     fun getAlertsByHazardType(type: String): Flow<List<DisasterAlertEntity>>
+
+    @Query("DELETE FROM disaster_alerts")
+    suspend fun clearAllAlerts()
 }

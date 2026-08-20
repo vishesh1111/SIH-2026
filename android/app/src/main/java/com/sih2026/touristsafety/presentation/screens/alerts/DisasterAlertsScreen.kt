@@ -24,8 +24,16 @@ import com.sih2026.touristsafety.data.local.entities.DisasterAlertEntity
 import java.util.concurrent.TimeUnit
 
 import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.location.Geocoder
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationServices
 import java.util.Locale
 
@@ -38,6 +46,7 @@ fun DisasterAlertsScreen(
     val selectedFilter by viewModel.selectedFilter.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isOffline by viewModel.isOffline.collectAsState()
+    val weather by viewModel.weather.collectAsState()
 
     val context = LocalContext.current
     var currentLocationText by remember { mutableStateOf("Locating...") }
@@ -64,6 +73,7 @@ fun DisasterAlertsScreen(
                                     } else {
                                         currentLocationText = "Location unknown"
                                     }
+                                    viewModel.fetchWeatherForLocation(location.latitude, location.longitude)
                                 }
                             } else {
                                 @Suppress("DEPRECATION")
@@ -76,6 +86,7 @@ fun DisasterAlertsScreen(
                                 } else {
                                     currentLocationText = "Location unknown"
                                 }
+                                viewModel.fetchWeatherForLocation(location.latitude, location.longitude)
                             }
                         } catch (e: Exception) {
                             currentLocationText = "Location unavailable"
@@ -97,7 +108,7 @@ fun DisasterAlertsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("SACHET Alerts") },
+                title = { Text("Alerts") },
                 actions = {
                     IconButton(onClick = { viewModel.refreshAlerts() }) {
                         Icon(Icons.Default.Warning, contentDescription = "Refresh")
@@ -138,6 +149,41 @@ fun DisasterAlertsScreen(
                 Icon(Icons.Default.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Current Location: $currentLocationText", style = MaterialTheme.typography.titleMedium)
+            }
+
+            // Weather Card
+            weather?.let { w ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Current Weather", style = MaterialTheme.typography.labelMedium)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("${String.format(java.util.Locale.US, "%.1f", w.temperature)}°C", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                            Text("Feels like ${String.format(java.util.Locale.US, "%.1f", w.feelsLike)}°C", style = MaterialTheme.typography.bodyMedium)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            val isHot = w.feelsLike >= 35.0
+                            if (isHot) {
+                                Text("High Heat Risk", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            } else {
+                                Text("Safe Temp", color = Color(0xFF4CAF50), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("Rainfall: ${w.precipitation} mm", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
             }
 
             // Filters
@@ -301,3 +347,5 @@ fun AlertCard(alert: DisasterAlertEntity) {
         }
     }
 }
+
+

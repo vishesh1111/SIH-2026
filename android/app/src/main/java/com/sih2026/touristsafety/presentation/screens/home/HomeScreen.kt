@@ -5,10 +5,13 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -22,6 +25,7 @@ import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -169,8 +173,46 @@ fun HomeScreen(navController: NavController) {
         )
     }
 
+    var showEmergencyDialog by remember { mutableStateOf(false) }
+    var pendingCallNumber by remember { mutableStateOf<String?>(null) }
+    
+    val callPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            pendingCallNumber?.let { num ->
+                val intent = android.content.Intent(android.content.Intent.ACTION_CALL, android.net.Uri.parse("tel:$num"))
+                context.startActivity(intent)
+            }
+        } else {
+            pendingCallNumber?.let { num ->
+                val intent = android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:$num"))
+                context.startActivity(intent)
+            }
+        }
+        pendingCallNumber = null
+        showEmergencyDialog = false
+    }
+
+    if (showEmergencyDialog) {
+        EmergencyNumbersDialog(
+            onDismiss = { showEmergencyDialog = false },
+            onCall = { number ->
+                val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
+                if (hasPermission) {
+                    val intent = android.content.Intent(android.content.Intent.ACTION_CALL, android.net.Uri.parse("tel:$number"))
+                    context.startActivity(intent)
+                    showEmergencyDialog = false
+                } else {
+                    pendingCallNumber = number
+                    callPermissionLauncher.launch(Manifest.permission.CALL_PHONE)
+                }
+            }
+        )
+    }
+
     // =========================================================================
-    // Main UI (unchanged)
+    // Main UI
     // =========================================================================
     Scaffold(
         bottomBar = {
@@ -184,6 +226,15 @@ fun HomeScreen(navController: NavController) {
                     }
                 }
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showEmergencyDialog = true },
+                containerColor = MaterialTheme.colorScheme.error,
+                shape = CircleShape
+            ) {
+                Icon(Icons.Default.Call, contentDescription = "Emergency Call", tint = Color.White)
+            }
         }
     ) { paddingValues ->
         Column(
@@ -246,7 +297,7 @@ fun HomeScreen(navController: NavController) {
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(quickActions) { action ->
+                gridItems(quickActions) { action ->
                     ElevatedCard(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -314,3 +365,70 @@ data class QuickActionItem(
     val icon: ImageVector,
     val route: String
 )
+
+@Composable
+fun EmergencyNumbersDialog(
+    onDismiss: () -> Unit,
+    onCall: (String) -> Unit
+) {
+    val emergencyNumbers = listOf(
+        "112" to "All in one Emergency Number",
+        "100" to "Police",
+        "101" to "Fire",
+        "102" to "Ambulance",
+        "103" to "Traffic Police",
+        "104" to "State level Helpline for Health",
+        "108" to "Disaster Management / Medical",
+        "1072" to "Train accident",
+        "1090" to "Anti terror Helpline/Alert All India",
+        "1096" to "Natural Disaster Control Room",
+        "1099" to "Central Accident and Trauma Services"
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "Emergency Helplines",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            LazyColumn {
+                items(emergencyNumbers) { (number, description) ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clickable { onCall(number) },
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Call,
+                                contentDescription = "Call",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column {
+                                Text(number, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text(description, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}

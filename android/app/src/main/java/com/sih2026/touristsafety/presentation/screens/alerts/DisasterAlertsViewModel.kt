@@ -29,9 +29,21 @@ class DisasterAlertsViewModel @Inject constructor(
     private val _isOffline = MutableStateFlow(false)
     val isOffline: StateFlow<Boolean> = _isOffline.asStateFlow()
 
+    private val _weather = MutableStateFlow<com.sih2026.touristsafety.data.repository.WeatherData?>(null)
+    val weather: StateFlow<com.sih2026.touristsafety.data.repository.WeatherData?> = _weather.asStateFlow()
+
     init {
         loadAlerts("All")
         refreshAlerts()
+    }
+
+    fun fetchWeatherForLocation(lat: Double, lng: Double) {
+        viewModelScope.launch {
+            val weatherData = repository.fetchWeather(lat, lng)
+            if (weatherData != null) {
+                _weather.value = weatherData
+            }
+        }
     }
 
     fun filterAlerts(type: String) {
