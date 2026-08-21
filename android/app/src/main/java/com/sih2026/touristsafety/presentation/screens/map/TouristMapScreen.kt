@@ -23,7 +23,7 @@ import com.google.android.gms.maps.model.LatLng
 import com.sih2026.touristsafety.domain.model.NearbyPlace
 import com.sih2026.touristsafety.domain.model.TouristLocation
 import com.sih2026.touristsafety.data.local.entities.GeofenceZoneEntity
-import androidx.compose.material3.ScrollableTabRow
+
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.filled.Send
@@ -91,18 +91,16 @@ fun TouristMapScreen(
         sheetPeekHeight = 120.dp,
         sheetContent = {
             Column(modifier = Modifier.fillMaxWidth().height(400.dp)) {
-                ScrollableTabRow(selectedTabIndex = selectedTab, edgePadding = 8.dp) {
+                TabRow(selectedTabIndex = selectedTab) {
                     Tab(selected = selectedTab == 0, onClick = { viewModel.selectTab(0) }, text = { Text("Nearby") })
-                    Tab(selected = selectedTab == 1, onClick = { viewModel.selectTab(1) }, text = { Text("Tourists") })
-                    Tab(selected = selectedTab == 2, onClick = { viewModel.selectTab(2) }, text = { Text("Zones") })
-                    Tab(selected = selectedTab == 3, onClick = { viewModel.selectTab(3) }, text = { Text("Share") })
+                    Tab(selected = selectedTab == 1, onClick = { viewModel.selectTab(1) }, text = { Text("Zones") })
+                    Tab(selected = selectedTab == 2, onClick = { viewModel.selectTab(2) }, text = { Text("Share") })
                 }
                 
                 when (selectedTab) {
                     0 -> NearbyPlacesList(nearbyPlaces)
-                    1 -> TouristsList(nearbyTourists) { viewModel.connectWithTourist(it) }
-                    2 -> DangerZonesList(dangerZones)
-                    3 -> ShareLocationList(nearbyPlaces)
+                    1 -> DangerZonesList(dangerZones)
+                    2 -> ShareLocationList(nearbyPlaces)
                 }
             }
         },
@@ -118,13 +116,6 @@ fun TouristMapScreen(
                     IconButton(onClick = onNavigateToCrowdDensity) {
                         Icon(Icons.Default.Group, contentDescription = "Crowd Density")
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Tourists", style = MaterialTheme.typography.labelSmall)
-                        Switch(
-                            checked = isShowingTourists,
-                            onCheckedChange = { viewModel.toggleTouristVisibility() }
-                        )
-                    }
                 }
             )
         }
@@ -135,8 +126,8 @@ fun TouristMapScreen(
                 userLocation = userLocation,
                 nearbyPlaces = nearbyPlaces,
                 dangerZones = dangerZones,
-                nearbyTourists = nearbyTourists,
-                isShowingTourists = isShowingTourists,
+                nearbyTourists = emptyList(),
+                isShowingTourists = false,
                 onRecenterRequested = {
                     // Re-fetch fresh GPS location when FAB is tapped
                     val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
@@ -201,45 +192,6 @@ fun NearbyPlacesList(places: List<NearbyPlace>) {
     }
 }
 
-@Composable
-fun TouristsList(tourists: List<TouristLocation>, onConnect: (String) -> Unit) {
-    val connectionStates = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
-    val context = LocalContext.current
-
-    LazyColumn(contentPadding = PaddingValues(16.dp)) {
-        items(tourists) { tourist ->
-            val isConnecting = connectionStates[tourist.id] == true
-
-            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Person, contentDescription = null)
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(tourist.name, style = MaterialTheme.typography.titleMedium)
-                        Text(tourist.nationality, style = MaterialTheme.typography.bodyMedium)
-                    }
-                    
-                    if (isConnecting) {
-                        TextButton(
-                            onClick = { },
-                            enabled = false
-                        ) {
-                            Text("Connecting...")
-                        }
-                    } else {
-                        Button(onClick = { 
-                            connectionStates[tourist.id] = true
-                            android.widget.Toast.makeText(context, "Connecting to ${tourist.name}...", android.widget.Toast.LENGTH_SHORT).show()
-                            onConnect(tourist.id)
-                        }) {
-                            Text("Connect")
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 @Composable
 fun DangerZonesList(zones: List<GeofenceZoneEntity>) {
