@@ -34,7 +34,8 @@ import androidx.compose.ui.text.font.FontWeight
 @Composable
 fun TouristMapScreen(
     viewModel: TouristMapViewModel = hiltViewModel(),
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToCrowdDensity: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
@@ -114,6 +115,9 @@ fun TouristMapScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onNavigateToCrowdDensity) {
+                        Icon(Icons.Default.Group, contentDescription = "Crowd Density")
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Tourists", style = MaterialTheme.typography.labelSmall)
                         Switch(

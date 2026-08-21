@@ -17,6 +17,7 @@ import com.sih2026.touristsafety.presentation.screens.auth.LoginScreen
 import com.sih2026.touristsafety.presentation.screens.auth.SignupScreen
 import com.sih2026.touristsafety.presentation.screens.chatbot.ChatbotScreen
 import com.sih2026.touristsafety.presentation.screens.contacts.EmergencyContactsScreen
+import com.sih2026.touristsafety.presentation.screens.crowd.CrowdDensityMapScreenWithViewModel
 import com.sih2026.touristsafety.presentation.screens.efir.EFirScreen
 import com.sih2026.touristsafety.presentation.screens.eprofile.DocumentDetailScreen
 import com.sih2026.touristsafety.presentation.screens.eprofile.DocumentUploadScreen
@@ -83,7 +84,10 @@ fun TouristSafetyNavHost(
 
         // Map (Feature 6) — expects onNavigateBack callback
         composable(Screen.Map.route) {
-            TouristMapScreen(onNavigateBack = { navController.popBackStack() })
+            TouristMapScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToCrowdDensity = { navController.navigate(Screen.CrowdDensity.route) }
+            )
         }
 
         // Emergency Contacts (Feature 2) — expects optional onNavigateNext
@@ -167,6 +171,19 @@ fun TouristSafetyNavHost(
         // Safety Monitor (Feature 11) — expects onNavigateBack
         composable(Screen.WomenSafety.route) {
             WomenSafetyScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        // Crowd Density / Stampede Prevention (Feature 12) — expects onNavigateBack
+        composable(Screen.CrowdDensity.route) {
+            CrowdDensityMapScreenWithViewModel(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        
+        composable(Screen.Connect.route) {
+            com.sih2026.touristsafety.presentation.screens.connect.ConnectScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
         // Settings

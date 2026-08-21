@@ -19,7 +19,7 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Chat
-import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.MicOff
@@ -293,7 +293,7 @@ fun HomeScreen(navController: NavController) {
                 QuickActionItem("Emergency", Icons.Default.Phone, Screen.EmergencyContacts.route),
                 QuickActionItem("Report", Icons.Default.CameraAlt, Screen.IncidentReport.route),
                 QuickActionItem("Assistant", Icons.Default.Chat, Screen.Chatbot.route),
-                QuickActionItem("Explore", Icons.Default.Explore, Screen.Map.route),
+                QuickActionItem("Connect", Icons.Default.People, Screen.Connect.route),
                 QuickActionItem("Documents", Icons.Default.Badge, Screen.EProfile.route),
                 QuickActionItem("Translate", Icons.Default.Translate, Screen.Translator.route)
             )

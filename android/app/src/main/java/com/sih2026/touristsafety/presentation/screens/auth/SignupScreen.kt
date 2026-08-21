@@ -52,7 +52,14 @@ fun SignupScreen(
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(24.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            TextButton(onClick = { navController.navigate(Screen.EmergencyContacts.route) }) {
+                Text("Skip for now")
+            }
+        }
         
         Text(
             text = "Create Account",

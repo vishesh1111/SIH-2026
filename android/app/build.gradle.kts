@@ -119,10 +119,15 @@ dependencies {
     implementation(libs.camerax.lifecycle)
     implementation(libs.camerax.view)
 
-    // OSMDroid & Location
+    // OSMDroid (for other map features)
     implementation("org.osmdroid:osmdroid-android:6.1.18")
+    
+    // Google Maps & Location Services
     implementation(libs.play.services.maps)
     implementation(libs.play.services.location)
+    
+    // Google Maps Compose - Stable version
+    implementation("com.google.maps.android:maps-compose:2.11.4")
 
     // TensorFlow Lite
     implementation(libs.tensorflow.lite)

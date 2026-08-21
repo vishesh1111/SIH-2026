@@ -34,11 +34,13 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 fun OsmMapView(
     modifier: Modifier = Modifier,
     userLocation: LatLng?,
+    userAddress: String? = null,
     nearbyPlaces: List<NearbyPlace>,
     dangerZones: List<GeofenceZoneEntity>,
     nearbyTourists: List<TouristLocation>,
     isShowingTourists: Boolean,
-    onRecenterRequested: () -> Unit = {}
+    onRecenterRequested: () -> Unit = {},
+    onTouristClick: ((TouristLocation) -> Unit)? = null
 ) {
     val context = LocalContext.current
 
@@ -112,6 +114,18 @@ fun OsmMapView(
                         tMarker.title = tourist.name
                         tMarker.snippet = tourist.nationality
                         tMarker.icon = ContextCompat.getDrawable(context, R.drawable.ic_tourist)
+                        
+                        tMarker.setOnMarkerClickListener { marker, mapView ->
+                            if (marker.isInfoWindowShown) {
+                                onTouristClick?.invoke(tourist)
+                                true
+                            } else {
+                                marker.showInfoWindow()
+                                mapView.controller.animateTo(marker.position)
+                                true
+                            }
+                        }
+                        
                         map.overlays.add(tMarker)
                     }
                 }
@@ -122,6 +136,9 @@ fun OsmMapView(
                     val userMarker = Marker(map)
                     userMarker.position = point
                     userMarker.title = "You are here"
+                    if (userAddress != null) {
+                        userMarker.snippet = userAddress
+                    }
                     userMarker.icon = ContextCompat.getDrawable(context, R.drawable.ic_user_location)
                     map.overlays.add(userMarker)
                     

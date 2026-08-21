@@ -6,6 +6,7 @@ sealed class Screen(val route: String) {
     object Signup : Screen("signup")
     object Home : Screen("home")
     object SOS : Screen("sos")
+    object Connect : Screen("connect")
     object Map : Screen("map")
     object EProfile : Screen("eprofile")
     object DocumentUpload : Screen("document_upload?category={category}") {
@@ -24,4 +25,5 @@ sealed class Screen(val route: String) {
     object EmergencyContacts : Screen("emergency_contacts")
     object WomenSafety : Screen("women_safety")
     object InactivitySettings : Screen("inactivity_settings")
+    object CrowdDensity : Screen("crowd_density")
 }

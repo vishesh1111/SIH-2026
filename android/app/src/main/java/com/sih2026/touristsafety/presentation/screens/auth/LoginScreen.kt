@@ -36,6 +36,17 @@ fun LoginScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            TextButton(onClick = { navController.navigate(Screen.EmergencyContacts.route) }) {
+                Text("Skip for now")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
         Text(
             text = "Tourist Safety",
             style = MaterialTheme.typography.displaySmall,
