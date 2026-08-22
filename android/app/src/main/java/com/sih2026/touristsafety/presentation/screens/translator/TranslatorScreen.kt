@@ -1,5 +1,6 @@
 package com.sih2026.touristsafety.presentation.screens.translator
 
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -33,6 +34,18 @@ fun TranslatorScreen(
     val clipboardManager = LocalClipboardManager.current
     var showSourceLangSheet by remember { mutableStateOf(false) }
     var showTargetLangSheet by remember { mutableStateOf(false) }
+
+    val speechRecognizerLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val data = result.data
+            val matches = data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)
+            if (!matches.isNullOrEmpty()) {
+                viewModel.setInputText(matches[0])
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -109,7 +122,18 @@ fun TranslatorScreen(
                 horizontalArrangement = Arrangement.Start
             ) {
                 val context = LocalContext.current
-                IconButton(onClick = { android.widget.Toast.makeText(context, "Voice input coming soon", android.widget.Toast.LENGTH_SHORT).show() }) {
+                IconButton(onClick = {
+                    try {
+                        val intent = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                            putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                            putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, sourceLang.code)
+                            putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Speak now to translate")
+                        }
+                        speechRecognizerLauncher.launch(intent)
+                    } catch (e: Exception) {
+                        android.widget.Toast.makeText(context, "Speech to text not supported on this device", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }) {
                     Icon(Icons.Default.Mic, "Speak")
                 }
                 IconButton(onClick = { viewModel.speakText(inputText, sourceLang.code) }) {

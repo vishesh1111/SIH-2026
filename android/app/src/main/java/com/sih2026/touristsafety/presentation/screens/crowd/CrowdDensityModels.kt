@@ -119,19 +119,19 @@ fun analyzeMockDensity(pointCount: Int): DensityInfo {
 fun generateMockHotspots(center: LatLng): List<Hotspot> {
     return listOf(
         Hotspot(
-            location = LatLng(center.latitude + 0.0005, center.longitude + 0.0003),
+            location = LatLng(center.latitude + 0.0025, center.longitude + 0.0015),
             name = "Main Entrance",
             peopleCount = 120,
             riskLevel = RiskLevel.CRITICAL
         ),
         Hotspot(
-            location = LatLng(center.latitude - 0.0003, center.longitude + 0.0005),
+            location = LatLng(center.latitude - 0.0018, center.longitude + 0.0022),
             name = "South Gate",
             peopleCount = 45,
             riskLevel = RiskLevel.LOW
         ),
         Hotspot(
-            location = LatLng(center.latitude + 0.0002, center.longitude - 0.0004),
+            location = LatLng(center.latitude + 0.0012, center.longitude - 0.0024),
             name = "Ticket Counter",
             peopleCount = 85,
             riskLevel = RiskLevel.HIGH

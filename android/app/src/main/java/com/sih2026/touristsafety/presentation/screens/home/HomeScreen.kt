@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOff
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Translate
@@ -295,7 +296,8 @@ fun HomeScreen(navController: NavController) {
                 QuickActionItem("Assistant", Icons.Default.Chat, Screen.Chatbot.route),
                 QuickActionItem("Connect", Icons.Default.People, Screen.Connect.route),
                 QuickActionItem("Documents", Icons.Default.Badge, Screen.EProfile.route),
-                QuickActionItem("Translate", Icons.Default.Translate, Screen.Translator.route)
+                QuickActionItem("Translate", Icons.Default.Translate, Screen.Translator.route),
+                QuickActionItem("Track", Icons.Default.Map, Screen.Track.route)
             )
 
             LazyVerticalGrid(

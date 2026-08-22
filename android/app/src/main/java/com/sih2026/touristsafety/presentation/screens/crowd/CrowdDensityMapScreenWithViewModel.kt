@@ -124,6 +124,45 @@ fun CrowdDensityMapScreenWithViewModel(
                     map.overlays.add(polygon)
                 }
 
+                // Draw secondary hotspots
+                uiState.hotspots.forEach { hotspot ->
+                    val hZoneColor = calculateDensityZone(hotspot.peopleCount).color.toInt()
+                    val hPolygon = Polygon()
+                    val hCenter = GeoPoint(hotspot.location.latitude, hotspot.location.longitude)
+                    val hPts = ArrayList<GeoPoint>()
+                    val hRadiusMeters = 100.0 // Slightly smaller radius for secondary hotspots
+                    for (i in 0..36) {
+                        val angle = (i * 10) * Math.PI / 180.0
+                        val radiusDeg = hRadiusMeters / 111000.0
+                        val ptLat = hCenter.latitude + radiusDeg * kotlin.math.cos(angle)
+                        val ptLon = hCenter.longitude + radiusDeg * kotlin.math.sin(angle) / kotlin.math.cos(hCenter.latitude * Math.PI / 180.0)
+                        hPts.add(GeoPoint(ptLat, ptLon))
+                    }
+                    hPolygon.points = hPts
+                    hPolygon.fillPaint.color = hZoneColor
+                    hPolygon.outlinePaint.color = hZoneColor
+                    hPolygon.outlinePaint.strokeWidth = 2f
+                    map.overlays.add(hPolygon)
+                    
+                    // Add a small label marker in the center of the hotspot
+                    val hMarker = OsmMarker(map)
+                    hMarker.position = hCenter
+                    hMarker.title = hotspot.name
+                    hMarker.snippet = "${hotspot.peopleCount} people detected"
+                    
+                    // Set a modern circular dot icon instead of the default green arrow
+                    val iconDrawable = androidx.core.content.ContextCompat.getDrawable(context, com.sih2026.touristsafety.R.drawable.ic_hotspot_dot)
+                    // Make the icon color opaque (remove the 0x40 alpha)
+                    val opaqueColor = hZoneColor or 0xFF000000.toInt()
+                    iconDrawable?.setTint(opaqueColor)
+                    hMarker.icon = iconDrawable
+                    
+                    // Center the anchor on the dot
+                    hMarker.setAnchor(OsmMarker.ANCHOR_CENTER, OsmMarker.ANCHOR_CENTER)
+                    
+                    map.overlays.add(hMarker)
+                }
+
                 if (!hasCenteredMap.value && uiState.centerLocation.latitude != 18.9220) {
                     map.controller.setCenter(GeoPoint(uiState.centerLocation.latitude, uiState.centerLocation.longitude))
                     hasCenteredMap.value = true

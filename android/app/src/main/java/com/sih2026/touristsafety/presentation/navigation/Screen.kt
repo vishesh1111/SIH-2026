@@ -26,4 +26,5 @@ sealed class Screen(val route: String) {
     object WomenSafety : Screen("women_safety")
     object InactivitySettings : Screen("inactivity_settings")
     object CrowdDensity : Screen("crowd_density")
+    object Track : Screen("track")
 }
