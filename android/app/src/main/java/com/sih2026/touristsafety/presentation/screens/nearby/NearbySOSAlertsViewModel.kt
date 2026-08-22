@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sih2026.touristsafety.data.local.dao.ReceivedSOSAlertDao
 import com.sih2026.touristsafety.data.local.entities.ReceivedSOSAlertEntity
+import com.sih2026.touristsafety.services.ble.BleSOSScanner
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -13,7 +14,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class NearbySOSAlertsViewModel @Inject constructor(
-    private val alertDao: ReceivedSOSAlertDao
+    private val alertDao: ReceivedSOSAlertDao,
+    private val bleScanner: BleSOSScanner
 ) : ViewModel() {
 
     val alerts: StateFlow<List<ReceivedSOSAlertEntity>> = alertDao.getAllAlerts().stateIn(
@@ -22,11 +24,29 @@ class NearbySOSAlertsViewModel @Inject constructor(
         initialValue = emptyList()
     )
 
+    init {
+        bleScanner.startScanning()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        bleScanner.stopScanning()
+    }
+
+    fun restartScanning() {
+        bleScanner.stopScanning()
+        bleScanner.startScanning()
+    }
+
     fun relayAlert(alertId: Int) {
         viewModelScope.launch {
             alertDao.markAsRelayed(alertId)
             // In a real app this would also POST to the backend, but for now just mark it.
         }
+    }
+
+    fun acknowledgeDirectly(userIdHash: String, helperInfo: String, onResult: (Boolean) -> Unit) {
+        bleScanner.acknowledgeAlert(userIdHash, helperInfo, onResult)
     }
 
     fun getDistanceEstimate(rssi: Int): String {

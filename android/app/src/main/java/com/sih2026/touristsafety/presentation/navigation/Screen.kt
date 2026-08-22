@@ -27,4 +27,5 @@ sealed class Screen(val route: String) {
     object InactivitySettings : Screen("inactivity_settings")
     object CrowdDensity : Screen("crowd_density")
     object Track : Screen("track")
+    object NearbySOS : Screen("nearby_sos")
 }

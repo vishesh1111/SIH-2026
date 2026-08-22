@@ -25,6 +25,7 @@ import com.sih2026.touristsafety.presentation.screens.eprofile.EProfileScreen
 import com.sih2026.touristsafety.presentation.screens.home.HomeScreen
 import com.sih2026.touristsafety.presentation.screens.incidents.IncidentReportScreen
 import com.sih2026.touristsafety.presentation.screens.map.TouristMapScreen
+import com.sih2026.touristsafety.presentation.screens.nearby.NearbySOSAlertsScreen
 import com.sih2026.touristsafety.presentation.screens.track.TrackScreen
 import com.sih2026.touristsafety.presentation.screens.onboarding.OnboardingScreen
 import com.sih2026.touristsafety.presentation.screens.safety.WomenSafetyScreen
@@ -190,6 +191,13 @@ fun TouristSafetyNavHost(
         // My Tracks
         composable(Screen.Track.route) {
             TrackScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        
+        // Nearby SOS Alerts (Bluetooth P2P)
+        composable(Screen.NearbySOS.route) {
+            NearbySOSAlertsScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

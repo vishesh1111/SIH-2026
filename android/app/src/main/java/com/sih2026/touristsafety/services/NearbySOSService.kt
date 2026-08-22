@@ -52,7 +52,19 @@ class NearbySOSService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannels()
-        startForeground(NOTIFICATION_ID, createForegroundNotification("Safety Mesh Active", "Protecting nearby tourists 🛡️"))
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID, 
+                    createForegroundNotification("Safety Mesh Active", "Protecting nearby tourists 🛡️"),
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, createForegroundNotification("Safety Mesh Active", "Protecting nearby tourists 🛡️"))
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         startScanning()
     }
 
@@ -68,13 +80,17 @@ class NearbySOSService : Service() {
                     val payload = SOSPayload(userId = userId, latitude = lat, longitude = lon, timestamp = System.currentTimeMillis(), sosType = sosType)
                     advertiser.startAdvertising(payload)
                     
-                    val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                    notificationManager.notify(NOTIFICATION_ID, createForegroundNotification("SOS Beacon Broadcasting...", "Sending help requests to nearby devices."))
+                    try {
+                        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                        notificationManager.notify(NOTIFICATION_ID, createForegroundNotification("SOS Beacon Broadcasting...", "Sending help requests to nearby devices."))
+                    } catch (e: Exception) {}
                 }
                 ACTION_STOP_ADVERTISING -> {
                     advertiser.stopAdvertising()
-                    val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                    notificationManager.notify(NOTIFICATION_ID, createForegroundNotification("Safety Mesh Active", "Protecting nearby tourists 🛡️"))
+                    try {
+                        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                        notificationManager.notify(NOTIFICATION_ID, createForegroundNotification("Safety Mesh Active", "Protecting nearby tourists 🛡️"))
+                    } catch (e: Exception) {}
                 }
                 ACTION_START_SCANNING -> {
                     startScanning()

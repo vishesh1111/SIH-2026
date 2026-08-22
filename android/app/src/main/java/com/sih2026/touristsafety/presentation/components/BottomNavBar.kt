@@ -32,7 +32,8 @@ import com.sih2026.touristsafety.presentation.navigation.Screen
 @Composable
 fun BottomNavBar(
     currentRoute: String?,
-    onNavigate: (String) -> Unit
+    onNavigate: (String) -> Unit,
+    onHazardClick: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier.fillMaxWidth(),
@@ -107,11 +108,11 @@ fun BottomNavBar(
                         .padding(4.dp)
                         .clip(CircleShape)
                         .background(Color(0xFFD32F2F))
-                        .clickable { onNavigate(Screen.SOS.route) }
+                        .clickable { onHazardClick() }
                 ) {
                     Icon(
                         imageVector = Icons.Default.Warning,
-                        contentDescription = "SOS",
+                        contentDescription = "Hazard Alarm",
                         tint = Color.White,
                         modifier = Modifier.size(28.dp)
                     )

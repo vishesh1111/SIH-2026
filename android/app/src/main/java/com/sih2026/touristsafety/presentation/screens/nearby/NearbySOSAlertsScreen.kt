@@ -21,8 +21,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -35,6 +37,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
+import androidx.core.content.ContextCompat
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NearbySOSAlertsScreen(
@@ -42,6 +51,33 @@ fun NearbySOSAlertsScreen(
     onNavigateBack: () -> Unit
 ) {
     val alerts by viewModel.alerts.collectAsState()
+    val context = LocalContext.current
+
+    val permissionsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        // Restart scanning if permissions are granted
+        if (permissions.values.any { it }) {
+            viewModel.restartScanning()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            val hasScan = ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
+            val hasConnect = ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+            if (!hasScan || !hasConnect) {
+                permissionsLauncher.launch(
+                    arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
+                )
+            }
+        } else {
+            val hasLocation = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (!hasLocation) {
+                permissionsLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION))
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -173,6 +209,9 @@ fun SOSAlertCard(
             
             Spacer(modifier = Modifier.height(16.dp))
             
+            var isAcknowledging by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+            var ackResult by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Boolean?>(null) }
+            
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
@@ -184,22 +223,35 @@ fun SOSAlertCard(
                         context.startActivity(intent)
                     }
                 ) {
-                    Text("Open in Maps")
+                    Text("Maps")
                 }
                 
                 Spacer(modifier = Modifier.width(8.dp))
                 
                 Button(
-                    onClick = { viewModel.relayAlert(alert.id) },
-                    enabled = !alert.relayedToServer,
-                    colors = ButtonDefaults.buttonColors(containerColor = SosRed)
+                    onClick = {
+                        isAcknowledging = true
+                        val helperInfo = "Helper Device (${android.os.Build.MODEL})"
+                        viewModel.acknowledgeDirectly(alert.victimUserIdHash, helperInfo) { success ->
+                            isAcknowledging = false
+                            ackResult = success
+                        }
+                    },
+                    enabled = !isAcknowledging && ackResult != true,
+                    colors = ButtonDefaults.buttonColors(containerColor = if (ackResult == true) Color.Green else SosRed)
                 ) {
-                    if (alert.relayedToServer) {
+                    if (isAcknowledging) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Connecting...")
+                    } else if (ackResult == true) {
                         Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Relayed")
+                        Text("Acknowledged")
+                    } else if (ackResult == false) {
+                        Text("Retry Ack")
                     } else {
-                        Text("Relay to Authorities")
+                        Text("Acknowledge")
                     }
                 }
             }

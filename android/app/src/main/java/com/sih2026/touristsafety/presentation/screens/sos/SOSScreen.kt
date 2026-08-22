@@ -38,61 +38,33 @@ fun SOSScreen(
     val state by viewModel.sosState.collectAsState()
     val context = LocalContext.current
 
-    // Helper function to dial emergency number
-    val dialEmergencyNumber = {
-        val hasCallPermission = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.CALL_PHONE
-        ) == PackageManager.PERMISSION_GRANTED
-        
-        if (hasCallPermission) {
-            try {
-                val callIntent = Intent(Intent.ACTION_CALL).apply {
-                    data = Uri.parse("tel:112")
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(callIntent)
-            } catch (e: SecurityException) {
-                // SecurityException fallback — open dialer
-                val dialIntent = Intent(Intent.ACTION_DIAL).apply {
-                    data = Uri.parse("tel:112")
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(dialIntent)
-            }
-        } else {
-            // No permission — open dialer instead
-            val dialIntent = Intent(Intent.ACTION_DIAL).apply {
-                data = Uri.parse("tel:112")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(dialIntent)
-        }
-    }
-
     val permissionsLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         if (permissions.values.all { it }) {
             viewModel.activateSOS()
-            dialEmergencyNumber()
         }
     }
 
     val onActivate = {
-        val requiredPermissions = arrayOf(
+        val requiredPermissions = mutableListOf(
             Manifest.permission.SEND_SMS,
             Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.CALL_PHONE
+            Manifest.permission.RECORD_AUDIO
         )
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            requiredPermissions.add(Manifest.permission.BLUETOOTH_CONNECT)
+            requiredPermissions.add(Manifest.permission.BLUETOOTH_ADVERTISE)
+            requiredPermissions.add(Manifest.permission.BLUETOOTH_SCAN)
+        }
+        
         val allGranted = requiredPermissions.all {
             ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
         }
         if (allGranted) {
             viewModel.activateSOS()
-            dialEmergencyNumber()
         } else {
-            permissionsLauncher.launch(requiredPermissions)
+            permissionsLauncher.launch(requiredPermissions.toTypedArray())
         }
     }
 
@@ -159,7 +131,32 @@ fun SOSScreen(
                 StatusIndicator(label = "Location Shared", isSuccess = activeState.locationShared)
                 StatusIndicator(label = "Audio Recording", isSuccess = activeState.audioRecording)
                 StatusIndicator(label = "BLE Beacon Active", isSuccess = activeState.bleAdvertising)
-                StatusIndicator(label = "Siren + Flashlight SOS", isSuccess = activeState.physicalSignaling)
+
+                if (activeState.acknowledgments.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        text = "HELP IS ON THE WAY!",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Green
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    activeState.acknowledgments.forEach { ack ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(0.9f).padding(vertical = 4.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.Green)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(text = "Acknowledged by: $ack", color = Color.Black, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(48.dp))
                 

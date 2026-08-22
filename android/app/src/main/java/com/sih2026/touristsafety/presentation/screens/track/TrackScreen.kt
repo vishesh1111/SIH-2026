@@ -124,14 +124,14 @@ fun TrackScreen(
                         map.overlays.add(polyline)
 
                         // Draw markers for each point
-                        uiState.visitedLocations.forEach { loc ->
+                        uiState.visitedLocations.forEachIndexed { index, loc ->
                             val marker = Marker(map)
                             marker.position = GeoPoint(loc.coordinates.latitude, loc.coordinates.longitude)
-                            marker.title = loc.name
+                            marker.title = "${index + 1}. ${loc.name}"
                             marker.snippet = "${loc.arrivalTime} - ${loc.departureTime} (${loc.duration})"
                             
                             val iconDrawable = androidx.core.content.ContextCompat.getDrawable(context, com.sih2026.touristsafety.R.drawable.ic_place)?.mutate()
-                            iconDrawable?.setTint(Color.parseColor("#E53935")) // Red color for the map pin
+                            iconDrawable?.setTint(android.graphics.Color.parseColor("#E53935")) // Red color for the map pin
                             marker.icon = iconDrawable
                             marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                             

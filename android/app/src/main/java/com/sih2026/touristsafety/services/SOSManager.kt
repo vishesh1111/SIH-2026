@@ -50,9 +50,9 @@ class SOSManager @Inject constructor(
         var latitude: Double? = null
         var longitude: Double? = null
 
-        // 0. Activate Physical Signals immediately (siren + flashlight SOS + max brightness)
-        physicalSignalService.activate()
-        physicalSignaling = true
+        // 0. Physical Signals (Removed from main SOS)
+        // physicalSignalService.activate() 
+        // physicalSignaling = true (remains false)
 
         // 1. Start Audio Recording
         audioRecording = startAudioRecording()
@@ -81,11 +81,9 @@ class SOSManager @Inject constructor(
                         smsSent = sendEmergencySMS(contacts, location)
                         android.util.Log.d("SOSManager", "SMS sent result: $smsSent")
                         
-                        // If SMS failed (no cellular signal), activate BLE broadcasting
-                        if (!smsSent || !isNetworkAvailable()) {
-                            startBLEAdvertising(location)
-                            bleAdvertising = true
-                        }
+                        // Always activate BLE P2P broadcasting for nearby helpers
+                        startBLEAdvertising(location)
+                        bleAdvertising = true
 
                         launch(Dispatchers.Main) {
                             onStatusUpdate(smsSent, locationShared, audioRecording, bleAdvertising, physicalSignaling, latitude, longitude)

@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.People
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,9 +47,15 @@ import com.sih2026.touristsafety.presentation.components.SOSButton
 import com.sih2026.touristsafety.presentation.components.bounceClick
 import com.sih2026.touristsafety.presentation.navigation.Screen
 
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.sih2026.touristsafety.presentation.screens.home.HomeViewModel
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(navController: NavController) {
+fun HomeScreen(
+    navController: NavController,
+    viewModel: HomeViewModel = hiltViewModel()
+) {
     val context = LocalContext.current
 
     // =========================================================================
@@ -56,6 +64,8 @@ fun HomeScreen(navController: NavController) {
     var showLocationRationale by remember { mutableStateOf(false) }
     var showMicRationale by remember { mutableStateOf(false) }
     var isLocationServiceEnabled by remember { mutableStateOf(true) }
+    
+    val isHazardActive by viewModel.isHazardActive.collectAsState()
     
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
@@ -174,6 +184,26 @@ fun HomeScreen(navController: NavController) {
         )
     }
 
+    if (isHazardActive) {
+        AlertDialog(
+            onDismissRequest = { /* Force action */ },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFD32F2F)) },
+            title = { Text("Hazard Alarm is Active") },
+            text = { Text("The physical siren and flashlight SOS are currently active. Tap below to turn them off.") },
+            confirmButton = {
+                Button(
+                    onClick = { 
+                        val activity = context as? android.app.Activity
+                        viewModel.toggleHazard(activity?.window?.attributes)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                ) {
+                    Text("Turn Off Alarm")
+                }
+            }
+        )
+    }
+
     var showEmergencyDialog by remember { mutableStateOf(false) }
     var pendingCallNumber by remember { mutableStateOf<String?>(null) }
     
@@ -212,6 +242,78 @@ fun HomeScreen(navController: NavController) {
         )
     }
 
+
+    var showHazardCountdown by remember { mutableStateOf(false) }
+    var countdownTicks by remember { mutableStateOf(3) }
+
+    if (showHazardCountdown) {
+        LaunchedEffect(countdownTicks) {
+            if (countdownTicks > 0) {
+                kotlinx.coroutines.delay(1000)
+                countdownTicks--
+            } else {
+                showHazardCountdown = false
+                val activity = context as? android.app.Activity
+                viewModel.toggleHazard(activity?.window?.attributes)
+                
+                val hasCallPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                    context, android.Manifest.permission.CALL_PHONE
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                
+                if (hasCallPermission) {
+                    try {
+                        val callIntent = android.content.Intent(android.content.Intent.ACTION_CALL).apply {
+                            data = android.net.Uri.parse("tel:112")
+                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(callIntent)
+                    } catch (e: SecurityException) {
+                        val dialIntent = android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
+                            data = android.net.Uri.parse("tel:112")
+                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(dialIntent)
+                    }
+                } else {
+                    val dialIntent = android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
+                        data = android.net.Uri.parse("tel:112")
+                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(dialIntent)
+                }
+            }
+        }
+
+        AlertDialog(
+            onDismissRequest = { showHazardCountdown = false },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFD32F2F)) },
+            title = { Text("Activating Hazard Alarm") },
+            text = { 
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Starting loud siren and flashlight in:")
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "$countdownTicks",
+                        style = MaterialTheme.typography.displayLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFD32F2F)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showHazardCountdown = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     // =========================================================================
     // Main UI
     // =========================================================================
@@ -224,6 +326,15 @@ fun HomeScreen(navController: NavController) {
                         popUpTo(Screen.Home.route) { saveState = true }
                         launchSingleTop = true
                         restoreState = true
+                    }
+                },
+                onHazardClick = {
+                    if (!viewModel.isHazardActive.value) {
+                        countdownTicks = 3
+                        showHazardCountdown = true
+                    } else {
+                        val activity = context as? android.app.Activity
+                        viewModel.toggleHazard(activity?.window?.attributes)
                     }
                 }
             )
@@ -297,7 +408,8 @@ fun HomeScreen(navController: NavController) {
                 QuickActionItem("Connect", Icons.Default.People, Screen.Connect.route),
                 QuickActionItem("Documents", Icons.Default.Badge, Screen.EProfile.route),
                 QuickActionItem("Translate", Icons.Default.Translate, Screen.Translator.route),
-                QuickActionItem("Track", Icons.Default.Map, Screen.Track.route)
+                QuickActionItem("Track", Icons.Default.Map, Screen.Track.route),
+                QuickActionItem("Nearby SOS", Icons.Default.Bluetooth, Screen.NearbySOS.route)
             )
 
             LazyVerticalGrid(
