@@ -9,6 +9,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,7 +18,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -102,10 +106,41 @@ fun NearbySOSAlertsScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 items(alerts, key = { it.id }) { alert ->
-                    SOSAlertCard(
-                        alert = alert,
-                        viewModel = viewModel
+                    val dismissState = rememberSwipeToDismissBoxState(
+                        confirmValueChange = {
+                            if (it == SwipeToDismissBoxValue.EndToStart) {
+                                viewModel.deleteAlert(alert.id)
+                                true
+                            } else false
+                        }
                     )
+
+                    SwipeToDismissBox(
+                        state = dismissState,
+                        enableDismissFromStartToEnd = false,
+                        backgroundContent = {
+                            val color by animateColorAsState(
+                                if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) Color.Red else Color.Transparent,
+                                label = "dismissColor"
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(color, RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 20.dp),
+                                contentAlignment = Alignment.CenterEnd
+                            ) {
+                                if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.White)
+                                }
+                            }
+                        }
+                    ) {
+                        SOSAlertCard(
+                            alert = alert,
+                            viewModel = viewModel
+                        )
+                    }
                 }
             }
         }
@@ -151,8 +186,46 @@ fun SOSAlertCard(
     val context = LocalContext.current
     val isRecent = (System.currentTimeMillis() - alert.receivedAt) < 5 * 60 * 1000
 
+    var showDetailsDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    if (showDetailsDialog) {
+        AlertDialog(
+            onDismissRequest = { showDetailsDialog = false },
+            title = { Text("SOS Alert Details") },
+            text = {
+                Column {
+                    val displayName = alert.victimName ?: "User ${alert.victimUserIdHash.take(6)}"
+                    Text("Victim: $displayName")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Location: ${alert.latitude}, ${alert.longitude}")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Distance: ${viewModel.getDistanceEstimate(alert.rssi)}")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Audio Recording: Sent to Cloud / Encrypted")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm:ss", Locale.getDefault())
+                    Text("Time: ${dateFormat.format(Date(alert.receivedAt))}")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDetailsDialog = false }) {
+                    Text("Close")
+                }
+            },
+            dismissButton = {
+                Button(onClick = {
+                    val uri = Uri.parse("geo:${alert.latitude},${alert.longitude}?q=${alert.latitude},${alert.longitude}(SOS+Alert)")
+                    val intent = Intent(Intent.ACTION_VIEW, uri)
+                    context.startActivity(intent)
+                }) {
+                    Text("Open in Maps")
+                }
+            }
+        )
+    }
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable { showDetailsDialog = true },
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isRecent) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surface

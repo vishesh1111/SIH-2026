@@ -100,6 +100,8 @@ class BleSOSAdvertiser @Inject constructor(
         if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) return
         advertiser = bluetoothAdapter.bluetoothLeAdvertiser
         if (advertiser == null) return
+        
+        stopAdvertising() // Ensure we stop the old payload before broadcasting the new one
 
         // 1. Start GATT Server to accept connections
         gattServer = bluetoothManager.openGattServer(context, gattServerCallback)

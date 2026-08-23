@@ -7,6 +7,7 @@ import androidx.room.PrimaryKey
 data class ReceivedSOSAlertEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val victimUserIdHash: String,
+    val victimName: String?,
     val latitude: Double,
     val longitude: Double,
     val sosType: Int,

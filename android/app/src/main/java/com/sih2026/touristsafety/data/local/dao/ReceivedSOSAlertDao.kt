@@ -23,4 +23,7 @@ interface ReceivedSOSAlertDao {
 
     @Query("SELECT COUNT(*) FROM received_sos_alerts WHERE victimUserIdHash = :userIdHash AND receivedAt > :sinceTimestamp")
     suspend fun countRecentAlerts(userIdHash: String, sinceTimestamp: Long): Int
+
+    @Query("DELETE FROM received_sos_alerts WHERE id = :alertId")
+    suspend fun deleteAlert(alertId: Int)
 }

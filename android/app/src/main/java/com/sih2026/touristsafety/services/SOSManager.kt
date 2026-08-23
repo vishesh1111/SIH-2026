@@ -58,7 +58,18 @@ class SOSManager @Inject constructor(
         audioRecording = startAudioRecording()
         onStatusUpdate(smsSent, locationShared, audioRecording, bleAdvertising, physicalSignaling, latitude, longitude)
 
-        // 2. Get Location & Send SMS (or BLE if offline)
+        // 2. Start BLE Immediately with last known location (if any)
+        fusedLocationClient.lastLocation.addOnSuccessListener { lastLoc ->
+            startBLEAdvertising(lastLoc)
+            bleAdvertising = true
+            onStatusUpdate(smsSent, locationShared, audioRecording, bleAdvertising, physicalSignaling, latitude, longitude)
+        }.addOnFailureListener {
+            startBLEAdvertising(null)
+            bleAdvertising = true
+            onStatusUpdate(smsSent, locationShared, audioRecording, bleAdvertising, physicalSignaling, latitude, longitude)
+        }
+
+        // 3. Request fresh location & Send SMS
         val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000)
             .setMaxUpdates(1)
             .build()
@@ -71,8 +82,10 @@ class SOSManager @Inject constructor(
                     longitude = location.longitude
                     locationShared = true
                     
+                    // Update BLE with new accurate location
+                    startBLEAdvertising(location)
+                    
                     scope.launch {
-                        // Try with user ID first, then fall back to all contacts
                         var contacts = contactDao.getContactsForUser("default_user").firstOrNull() ?: emptyList()
                         if (contacts.isEmpty()) {
                             contacts = contactDao.getAllContacts().firstOrNull() ?: emptyList()
@@ -81,10 +94,6 @@ class SOSManager @Inject constructor(
                         smsSent = sendEmergencySMS(contacts, location)
                         android.util.Log.d("SOSManager", "SMS sent result: $smsSent")
                         
-                        // Always activate BLE P2P broadcasting for nearby helpers
-                        startBLEAdvertising(location)
-                        bleAdvertising = true
-
                         launch(Dispatchers.Main) {
                             onStatusUpdate(smsSent, locationShared, audioRecording, bleAdvertising, physicalSignaling, latitude, longitude)
                         }
@@ -111,12 +120,12 @@ class SOSManager @Inject constructor(
      * Starts the NearbySOSService to broadcast an SOS beacon via BLE.
      * Works even in Airplane mode (BLE can be enabled independently).
      */
-    private fun startBLEAdvertising(location: Location) {
+    private fun startBLEAdvertising(location: Location?) {
         try {
             val intent = Intent(context, NearbySOSService::class.java).apply {
                 action = NearbySOSService.ACTION_START_ADVERTISING
-                putExtra(NearbySOSService.EXTRA_LATITUDE, location.latitude)
-                putExtra(NearbySOSService.EXTRA_LONGITUDE, location.longitude)
+                putExtra(NearbySOSService.EXTRA_LATITUDE, location?.latitude ?: 0.0)
+                putExtra(NearbySOSService.EXTRA_LONGITUDE, location?.longitude ?: 0.0)
                 putExtra(NearbySOSService.EXTRA_USER_ID, "default_user")
                 putExtra(NearbySOSService.EXTRA_SOS_TYPE, 0.toByte())
             }

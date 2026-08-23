@@ -22,7 +22,7 @@ import com.sih2026.touristsafety.data.local.entities.ReceivedSOSAlertEntity
         ChatMessageEntity::class,
         ReceivedSOSAlertEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class TouristSafetyDatabase : RoomDatabase() {

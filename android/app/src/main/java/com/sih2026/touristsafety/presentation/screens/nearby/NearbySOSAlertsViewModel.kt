@@ -49,6 +49,12 @@ class NearbySOSAlertsViewModel @Inject constructor(
         bleScanner.acknowledgeAlert(userIdHash, helperInfo, onResult)
     }
 
+    fun deleteAlert(alertId: Int) {
+        viewModelScope.launch {
+            alertDao.deleteAlert(alertId)
+        }
+    }
+
     fun getDistanceEstimate(rssi: Int): String {
         return when {
             rssi > -50 -> "Very close (< 5m)"

@@ -66,8 +66,12 @@ class BleSOSScanner @Inject constructor(
                             )
                             
                             if (recentCount == 0) {
+                                // Extract the device name broadcasted by setIncludeDeviceName(true)
+                                val deviceName = scanResult.device.name ?: scanResult.scanRecord?.deviceName
+
                                 val entity = ReceivedSOSAlertEntity(
                                     victimUserIdHash = hash,
+                                    victimName = deviceName,
                                     latitude = payload.latitude,
                                     longitude = payload.longitude,
                                     sosType = payload.sosType.toInt(),
@@ -98,7 +102,7 @@ class BleSOSScanner @Inject constructor(
         val gattCallback = object : BluetoothGattCallback() {
             override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
-                    gatt.discoverServices()
+                    gatt.requestMtu(512) // Request max MTU to avoid 20-byte truncation
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                     if (!isDone) {
                         isDone = true
@@ -106,6 +110,11 @@ class BleSOSScanner @Inject constructor(
                     }
                     gatt.close()
                 }
+            }
+
+            override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
+                super.onMtuChanged(gatt, mtu, status)
+                gatt.discoverServices() // Proceed to discover services after MTU is updated
             }
 
             override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
