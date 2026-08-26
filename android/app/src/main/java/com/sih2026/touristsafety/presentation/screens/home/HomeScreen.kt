@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -406,7 +407,7 @@ fun HomeScreen(
                 QuickActionItem("Report", Icons.Default.CameraAlt, Screen.IncidentReport.route),
                 QuickActionItem("Assistant", Icons.Default.Chat, Screen.Chatbot.route),
                 QuickActionItem("Connect", Icons.Default.People, Screen.Connect.route),
-                QuickActionItem("Documents", Icons.Default.Badge, Screen.EProfile.route),
+                QuickActionItem("Start Journey", Icons.Default.Security, Screen.StartJourney.route),
                 QuickActionItem("Translate", Icons.Default.Translate, Screen.Translator.route),
                 QuickActionItem("Track", Icons.Default.Map, Screen.Track.route),
                 QuickActionItem("Nearby SOS", Icons.Default.Bluetooth, Screen.NearbySOS.route)

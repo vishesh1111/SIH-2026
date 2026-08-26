@@ -202,6 +202,13 @@ fun TouristSafetyNavHost(
             )
         }
 
+        // Start Journey (Session-Based Monitoring)
+        composable(Screen.StartJourney.route) {
+            com.sih2026.touristsafety.presentation.screens.journey.StartJourneyScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
         // Settings
         composable(Screen.InactivitySettings.route) {
             InactivitySettingsScreen(onNavigateBack = { navController.popBackStack() })
