@@ -38,7 +38,7 @@ import com.sih2026.touristsafety.presentation.screens.translator.TranslatorScree
 fun TouristSafetyNavHost(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
-    startDestination: String = Screen.Onboarding.route
+    startDestination: String = Screen.Home.route
 ) {
     NavHost(
         navController = navController,
@@ -106,7 +106,10 @@ fun TouristSafetyNavHost(
 
         // Incident Reporting (Feature 4) — expects onNavigateBack
         composable(Screen.IncidentReport.route) {
-            IncidentReportScreen(onNavigateBack = { navController.popBackStack() })
+            IncidentReportScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToEFir = { navController.navigate(Screen.EFir.route) }
+            )
         }
 
         // AI Chatbot (Feature 5) — no nav params needed

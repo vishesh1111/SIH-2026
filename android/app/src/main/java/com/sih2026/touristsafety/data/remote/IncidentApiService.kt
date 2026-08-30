@@ -11,7 +11,9 @@ data class AIAnalysisResult(
     val sceneDescription: String,
     val detectedObjects: List<String>,
     val potentialIncidentType: String,
-    val severityAssessment: String
+    val severityAssessment: String,
+    val suggestedBnsSections: List<String> = emptyList(),
+    val jurisdictionalPoliceStation: String = ""
 )
 
 data class IncidentDto(

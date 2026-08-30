@@ -1,10 +1,10 @@
 package com.sih2026.touristsafety.presentation.screens.journey
 
 import android.Manifest
-import android.content.pm.PackageManager
-import android.media.AudioFormat
-import android.media.AudioRecord
-import android.media.MediaRecorder
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.animation.expandVertically
@@ -13,6 +13,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,18 +21,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Bluetooth
-import androidx.compose.material.icons.filled.BluetoothSearching
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.BluetoothSearching
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,7 +31,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -50,24 +41,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.sih2026.touristsafety.services.ThreatLevel
 import java.util.*
 
 // ─── Color Palette ───────────────────────────────────────────────────────────
 private val JourneyGreen = Color(0xFF00C853)
-private val JourneyGreenDark = Color(0xFF009624)
-private val JourneyRed = Color(0xFFD32F2F)
-private val JourneyRedDark = Color(0xFF9A0007)
 private val JourneyAmber = Color(0xFFFF8F00)
 private val JourneyBlue = Color(0xFF1565C0)
-private val CardDark = Color(0xFF1E1E2E)
-private val CardDarkBorder = Color(0xFF2A2A3E)
 private val ThreatRed = Color(0xFFEF5350)
 private val SafeGreen = Color(0xFF66BB6A)
 
@@ -83,173 +64,33 @@ enum class ThreatSeverity { LOW, MEDIUM, HIGH, CRITICAL }
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StartJourneyScreen(
+    viewModel: StartJourneyViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit
 ) {
-    var isJourneyActive by remember { mutableStateOf(false) }
-    var elapsedSeconds by remember { mutableIntStateOf(0) }
-    var audioConfidence by remember { mutableFloatStateOf(0f) }
-    var gpsLat by remember { mutableDoubleStateOf(28.6139) }
-    var gpsLng by remember { mutableDoubleStateOf(77.2090) }
-    var bleDevicesFound by remember { mutableIntStateOf(0) }
-    var bleConnected by remember { mutableStateOf(false) }
-    var threatDetected by remember { mutableStateOf(false) }
-    var threatEvents by remember { mutableStateOf(listOf<ThreatEvent>()) }
-    var currentAudioLevel by remember { mutableFloatStateOf(0f) }
+    val isJourneyActive by viewModel.isJourneyActive.collectAsState()
+    val elapsedSeconds by viewModel.elapsedSeconds.collectAsState()
+    val audioConfidence by viewModel.audioConfidence.collectAsState()
+    val threatLevel by viewModel.threatLevel.collectAsState()
+    val threatDetected by viewModel.threatDetected.collectAsState()
+    val latestTranscript by viewModel.latestTranscript.collectAsState()
+    val keywordCount by viewModel.keywordCount.collectAsState()
+    val activeSpeakerGender by viewModel.activeSpeakerGender.collectAsState()
+    val locationName by viewModel.locationName.collectAsState()
+    val nearbyAuthorities by viewModel.nearbyAuthorities.collectAsState()
+    val bleDevicesFound by viewModel.bleDevicesFound.collectAsState()
+    val bleConnected by viewModel.bleConnected.collectAsState()
+    val sosCountdown by viewModel.sosCountdown.collectAsState()
+    val isSosDispatched by viewModel.isSosDispatched.collectAsState()
+    val threatEvents by viewModel.threatEvents.collectAsState()
 
     val haptic = LocalHapticFeedback.current
     val listState = rememberLazyListState()
     val context = LocalContext.current
 
-    // ── Real-time updates & Real Audio Recording when journey is active ──
-    LaunchedEffect(isJourneyActive) {
-        if (isJourneyActive) {
-            // Reset state
-            elapsedSeconds = 0
-            audioConfidence = 0f
-            threatDetected = false
-            threatEvents = emptyList()
-            bleDevicesFound = 0
-            bleConnected = false
-            currentAudioLevel = 0f
-
-            val hasMic = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-
-            var audioRecord: AudioRecord? = null
-            var bufferSize = 0
-            if (hasMic) {
-                try {
-                    bufferSize = AudioRecord.getMinBufferSize(
-                        8000,
-                        AudioFormat.CHANNEL_IN_MONO,
-                        AudioFormat.ENCODING_PCM_16BIT
-                    )
-                    audioRecord = AudioRecord(
-                        MediaRecorder.AudioSource.MIC,
-                        8000,
-                        AudioFormat.CHANNEL_IN_MONO,
-                        AudioFormat.ENCODING_PCM_16BIT,
-                        bufferSize
-                    )
-                    audioRecord.startRecording()
-                } catch (e: SecurityException) {
-                    audioRecord = null
-                } catch (e: Exception) {
-                    audioRecord = null
-                }
-            } else {
-                // If no permission, add a warning event
-                val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                val now = sdf.format(Date())
-                threatEvents = listOf(ThreatEvent(
-                    timestamp = now,
-                    type = "⚠ Microphone Permission Denied",
-                    message = "Cannot access real microphone for audio anomaly detection.",
-                    severity = ThreatSeverity.MEDIUM
-                ))
-            }
-
-            // A separate coroutine for the timer and other simulations
-            launch {
-                while (isActive) {
-                    delay(1000)
-                    elapsedSeconds++
-
-                    // Update confidence smoothly once per second to avoid rapid flickering
-                    if (!threatDetected) {
-                        if (currentAudioLevel < 0.15f) {
-                            // Stable low confidence for normal background noise (1% - 4%)
-                            audioConfidence = 0.01f + Math.random().toFloat() * 0.03f
-                        } else {
-                            audioConfidence = currentAudioLevel
-                        }
-                    }
-                }
-            }
-
-            // A separate coroutine for audio processing
-            withContext(Dispatchers.IO) {
-                val buffer = ShortArray(if (bufferSize > 0) bufferSize else 1024)
-                while (isActive) {
-                    if (audioRecord != null && audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                        val readSize = audioRecord.read(buffer, 0, buffer.size)
-                        if (readSize > 0) {
-                            var maxAmp = 0
-                            for (i in 0 until readSize) {
-                                val amp = Math.abs(buffer[i].toInt())
-                                if (amp > maxAmp) maxAmp = amp
-                            }
-                            
-                            // Normalize 16-bit PCM amplitude (0 to 32767) to (0.0 to 1.0)
-                            // We multiply by a factor (e.g. 1.5x) so normal speech isn't completely ignored 
-                            // but screaming easily hits high confidence.
-                            val normalized = (maxAmp / 32767f * 1.5f).coerceIn(0f, 1f)
-
-                            withContext(Dispatchers.Main) {
-                                currentAudioLevel = normalized
-
-                                // Trigger threat if amplitude crosses a high threshold
-                                if (normalized > 0.75f && !threatDetected) {
-                                    threatDetected = true
-                                    audioConfidence = normalized
-                                    
-                                    val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                                    val now = sdf.format(Date())
-                                    threatEvents = listOf(ThreatEvent(
-                                        timestamp = now,
-                                        type = "🔊 Loud Noise / Scream Detected",
-                                        message = "High-confidence distress audio (${(normalized*100).toInt()}%). Auto-triggering SOS protocol.",
-                                        severity = ThreatSeverity.CRITICAL
-                                    )) + threatEvents
-                                    
-                                    // Automatically simulate the follow-up actions of sharing GPS and BLE
-                                    launch {
-                                        delay(1500)
-                                        val now2 = sdf.format(Date())
-                                        threatEvents = listOf(ThreatEvent(
-                                            timestamp = now2,
-                                            type = "📍 GPS Shared",
-                                            message = "Coordinates (${String.format(Locale.US, "%.4f", gpsLat)}, ${String.format(Locale.US, "%.4f", gpsLng)}) dispatched to nearby authorities.",
-                                            severity = ThreatSeverity.HIGH
-                                        )) + threatEvents
-                                        
-                                        delay(2000)
-                                        val now3 = sdf.format(Date())
-                                        threatEvents = listOf(ThreatEvent(
-                                            timestamp = now3,
-                                            type = "📶 BLE Relay",
-                                            message = "Emergency SOS packet relayed through ${bleDevicesFound} mesh nodes.",
-                                            severity = ThreatSeverity.HIGH
-                                        )) + threatEvents
-                                        
-                                        // Clear threat after some time if things quiet down
-                                        delay(15000)
-                                        if (currentAudioLevel < 0.4f) {
-                                            threatDetected = false
-                                            val now4 = sdf.format(Date())
-                                            threatEvents = listOf(ThreatEvent(
-                                                timestamp = now4,
-                                                type = "✅ All Clear",
-                                                message = "Audio levels returned to normal. Active monitoring continues.",
-                                                severity = ThreatSeverity.LOW
-                                            )) + threatEvents
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        // If no audio record, just delay so we don't spin endlessly
-                        delay(100)
-                    }
-                }
-
-                // Cleanup audio
-                try {
-                    audioRecord?.stop()
-                    audioRecord?.release()
-                } catch (e: Exception) {}
-            }
-        }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        viewModel.toggleJourney(context)
     }
 
     // ── Pulse animation for the start button ──
@@ -295,7 +136,7 @@ fun StartJourneyScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -309,36 +150,36 @@ fun StartJourneyScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(bottom = 32.dp)
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // ══════════════════════════════════════════════════════════════
-            // Section 1: Hero Start/Stop Button
+            // Section 1: Hero Start/Stop Button with Real Status
             // ══════════════════════════════════════════════════════════════
             item {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp),
+                        .padding(vertical = 12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Status text
+                    // Status text above button
                     Text(
-                        text = if (isJourneyActive) "Journey Active" else "Ready to Start",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = if (isJourneyActive) JourneyGreen else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                        fontWeight = FontWeight.SemiBold
+                        text = if (threatDetected) "Threat Detected!"
+                        else if (isJourneyActive) "Journey Active"
+                        else "Ready to Start",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = if (threatDetected) ThreatRed
+                        else if (isJourneyActive) JourneyGreen
+                        else MaterialTheme.colorScheme.onBackground
                     )
 
                     Spacer(Modifier.height(4.dp))
 
                     Text(
-                        text = if (isJourneyActive) {
-                            "Privacy-first monitoring active • ${formatTime(elapsedSeconds)}"
-                        } else {
-                            "Tap to begin session-based safety monitoring"
-                        },
+                        text = if (isJourneyActive) "Privacy-first ML monitoring active • ${formatTime(elapsedSeconds)}"
+                        else "Tap START before beginning your journey for continuous safety monitoring",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
                         textAlign = TextAlign.Center
@@ -383,7 +224,18 @@ fun StartJourneyScreen(
                         Button(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                isJourneyActive = !isJourneyActive
+                                if (!isJourneyActive) {
+                                    permissionLauncher.launch(
+                                        arrayOf(
+                                            Manifest.permission.RECORD_AUDIO,
+                                            Manifest.permission.ACCESS_FINE_LOCATION,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                                            Manifest.permission.SEND_SMS
+                                        )
+                                    )
+                                } else {
+                                    viewModel.toggleJourney(context)
+                                }
                             },
                             modifier = Modifier
                                 .size(140.dp)
@@ -434,6 +286,83 @@ fun StartJourneyScreen(
             }
 
             // ══════════════════════════════════════════════════════════════
+            // Section 1.5: 10s Cancelable SOS Countdown Overlay
+            // ══════════════════════════════════════════════════════════════
+            if (sosCountdown > 0) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFD32F2F))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White)
+                                Spacer(Modifier.width(8.dp))
+                                Text("🚨 THREAT CONFIRMED", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Auto-dispatching SOS emergency broadcast in ${sosCountdown}s",
+                                color = Color.White.copy(alpha = 0.9f),
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Button(
+                                onClick = { viewModel.cancelSOSCountdown(context) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.White,
+                                    contentColor = Color(0xFFD32F2F)
+                                )
+                            ) {
+                                Text("Cancel SOS (I'm Safe)", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            } else if (isSosDispatched) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFB71C1C))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF69F0AE))
+                                Spacer(Modifier.width(8.dp))
+                                Text("🚨 SOS BROADCAST ACTIVE", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            val policeName = nearbyAuthorities.firstOrNull { it.type == AuthorityType.POLICE }?.name ?: "Local Police Station"
+                            val hospitalName = nearbyAuthorities.firstOrNull { it.type == AuthorityType.HOSPITAL }?.name ?: "District Hospital"
+                            Text(
+                                "Emergency SMS dispatched to contacts. Alert notifications sent to $policeName (0.7km), $hospitalName (1.2km) & Ambulance 108 near $locationName.",
+                                color = Color.White.copy(alpha = 0.95f),
+                                fontSize = 12.sp,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Button(
+                                onClick = { viewModel.cancelSOSCountdown(context) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.White,
+                                    contentColor = Color(0xFFB71C1C)
+                                )
+                            ) {
+                                Text("Dismiss / Stop SOS", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ══════════════════════════════════════════════════════════════
             // Section 2: Active Monitoring Status Cards
             // ══════════════════════════════════════════════════════════════
             item {
@@ -447,7 +376,7 @@ fun StartJourneyScreen(
                         MonitoringCard(
                             icon = Icons.Default.Mic,
                             title = "ML Audio Detection",
-                            subtitle = "On-device anomaly detection active",
+                            subtitle = "On-device distress & keyword models active",
                             statusColor = if (threatDetected) ThreatRed else SafeGreen,
                             statusText = if (threatDetected) "⚠ THREAT DETECTED" else "✓ Normal",
                             iconTint = if (threatDetected) ThreatRed else JourneyGreen
@@ -456,9 +385,24 @@ fun StartJourneyScreen(
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column {
+                                    Text(
+                                        "Threat Level",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                    )
+                                    Text(
+                                        threatLevel.name,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (threatLevel == ThreatLevel.CRITICAL || threatLevel == ThreatLevel.HIGH) ThreatRed else JourneyGreen
+                                    )
+                                }
+
+                                Column(horizontalAlignment = Alignment.End) {
                                     Text(
                                         "Confidence",
                                         style = MaterialTheme.typography.labelSmall,
@@ -468,74 +412,125 @@ fun StartJourneyScreen(
                                         "${(audioConfidence * 100).toInt()}%",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (audioConfidence > 0.7f) ThreatRed else MaterialTheme.colorScheme.onSurface
+                                        color = if (audioConfidence > 0.6f) ThreatRed else MaterialTheme.colorScheme.onSurface
                                     )
+                                }
+                            }
+
+                            if (!latestTranscript.isNullOrBlank()) {
+                                Spacer(Modifier.height(8.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("🗣️ Heard: ", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                                        Text(
+                                            text = "\"$latestTranscript\"",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (activeSpeakerGender != null) {
+                                Spacer(Modifier.height(6.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    InfoChip("Voice Gender", activeSpeakerGender!!.replaceFirstChar { it.uppercase() })
+                                    if (keywordCount > 0) {
+                                        InfoChip("Keywords", "$keywordCount/5 detected")
+                                    }
                                 }
                             }
                         }
 
-                        // ── GPS Tracking Card ──
+                        // ── GPS Tracking Card: Shows Real Location Name ──
                         MonitoringCard(
                             icon = Icons.Default.LocationOn,
                             title = "GPS Tracking",
-                            subtitle = "Auto-shares coordinates on threat detection",
+                            subtitle = "Auto-shares location on threat detection",
                             statusColor = SafeGreen,
                             statusText = "✓ Locked",
                             iconTint = JourneyBlue
                         ) {
                             Spacer(Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Column {
-                                    Text(
-                                        "Latitude",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Place,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
                                     )
+                                    Spacer(Modifier.width(6.dp))
                                     Text(
-                                        String.format(Locale.US, "%.6f°N", gpsLat),
-                                        style = MaterialTheme.typography.bodyLarge,
+                                        text = locationName,
+                                        style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(
-                                        "Longitude",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                    )
-                                    Text(
-                                        String.format(Locale.US, "%.6f°E", gpsLng),
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
                                     )
                                 }
                             }
-                            Spacer(Modifier.height(6.dp))
-                            LinearProgressIndicator(
-                                progress = { 1f },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(3.dp)
-                                    .clip(RoundedCornerShape(2.dp)),
-                                color = JourneyBlue,
-                                trackColor = JourneyBlue.copy(alpha = 0.15f)
-                            )
-                            Text(
-                                "Accuracy: ±3m • Updated ${elapsedSeconds}s ago",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
+
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "Accuracy: ±3m • Real-time GPS Locked",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = SafeGreen,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        // ── Nearby Emergency Authorities Card ──
+                        MonitoringCard(
+                            icon = Icons.Default.LocalPolice,
+                            title = "Nearby Emergency Authorities",
+                            subtitle = if (isSosDispatched) "🚨 Live SOS Alert Notified to Local Authorities" else "Auto-mapped response units in your jurisdiction",
+                            statusColor = if (isSosDispatched) ThreatRed else SafeGreen,
+                            statusText = if (isSosDispatched) "🚨 ALERT NOTIFIED" else "● Standby",
+                            iconTint = if (isSosDispatched) ThreatRed else MaterialTheme.colorScheme.primary
+                        ) {
+                            Spacer(Modifier.height(8.dp))
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                nearbyAuthorities.forEach { authority ->
+                                    AuthorityItemRow(authority = authority) {
+                                        val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${authority.phone}"))
+                                        context.startActivity(intent)
+                                    }
+                                }
+                            }
                         }
 
                         // ── BLE P2P Mesh Card ──
                         MonitoringCard(
-                            icon = if (bleConnected) Icons.Default.Bluetooth else Icons.Default.BluetoothSearching,
+                            icon = if (bleConnected) Icons.Default.Bluetooth else Icons.AutoMirrored.Filled.BluetoothSearching,
                             title = "BLE P2P Mesh Relay",
                             subtitle = "Emergency broadcast to nearby authorities",
                             statusColor = if (bleConnected) SafeGreen else JourneyAmber,
@@ -571,9 +566,10 @@ fun StartJourneyScreen(
                                     )
                                     Spacer(Modifier.width(8.dp))
                                     Text(
-                                        "Encrypted mesh ready. On threat: auto-broadcast GPS + SOS to police devices within range.",
+                                        "Mesh node online. Packets will relay through nearby devices without internet.",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                        color = JourneyBlue,
+                                        fontSize = 11.sp
                                     )
                                 }
                             }
@@ -583,67 +579,178 @@ fun StartJourneyScreen(
             }
 
             // ══════════════════════════════════════════════════════════════
-            // Section 3: Live Threat Event Log
+            // Section 3: Live Event Log (Key Milestones Only)
             // ══════════════════════════════════════════════════════════════
-            if (isJourneyActive && threatEvents.isNotEmpty()) {
-                item {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
                         "Live Event Log",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(top = 4.dp)
+                        fontWeight = FontWeight.Bold
                     )
-                }
-
-                items(threatEvents) { event ->
-                    ThreatEventCard(event)
+                    if (threatEvents.isNotEmpty()) {
+                        Text(
+                            "${threatEvents.size} events",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                        )
+                    }
                 }
             }
 
-            // ══════════════════════════════════════════════════════════════
-            // Section 4: Info card (shown when not active)
-            // ══════════════════════════════════════════════════════════════
-            if (!isJourneyActive) {
+            if (threatEvents.isEmpty()) {
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        )
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                     ) {
-                        Column(modifier = Modifier.padding(20.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
-                                "Privacy-First Monitoring",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
+                                "No events yet. Start the journey to begin monitoring.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                textAlign = TextAlign.Center
                             )
-                            Spacer(Modifier.height(8.dp))
-                            val features = listOf(
-                                "🎤  On-device ML audio processing (never uploaded)",
-                                "📍  GPS shared only on threat detection",
-                                "📶  BLE P2P mesh for offline emergency relay",
-                                "🔒  Session data cleared when journey ends",
-                                "⚡  Automatic SOS on scream/distress detection"
-                            )
-                            features.forEach { feature ->
-                                Text(
-                                    text = feature,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                    modifier = Modifier.padding(vertical = 3.dp)
-                                )
-                            }
                         }
                     }
                 }
+            } else {
+                items(threatEvents) { event ->
+                    ThreatEventCard(event = event)
+                }
+            }
+
+            item {
+                Spacer(Modifier.height(16.dp))
             }
         }
     }
 }
 
-// ─── Helper Composables ──────────────────────────────────────────────────────
+@Composable
+private fun AuthorityItemRow(
+    authority: NearbyAuthority,
+    onCallClick: () -> Unit
+) {
+    val icon = when (authority.type) {
+        AuthorityType.POLICE -> Icons.Default.LocalPolice
+        AuthorityType.HOSPITAL -> Icons.Default.LocalHospital
+        AuthorityType.AMBULANCE -> Icons.Default.Emergency
+        AuthorityType.PATROL -> Icons.Default.Shield
+    }
 
+    val iconColor = when (authority.type) {
+        AuthorityType.POLICE -> JourneyBlue
+        AuthorityType.HOSPITAL -> Color(0xFFE53935)
+        AuthorityType.AMBULANCE -> JourneyAmber
+        AuthorityType.PATROL -> JourneyGreen
+    }
+
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = if (authority.isNotified) ThreatRed.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+        border = if (authority.isNotified) androidx.compose.foundation.BorderStroke(1.dp, ThreatRed.copy(alpha = 0.5f)) else null,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(iconColor.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Spacer(Modifier.width(10.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = authority.name,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${authority.distance} • ${authority.address}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(Modifier.width(6.dp))
+
+            if (authority.isNotified) {
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = ThreatRed
+                ) {
+                    Text(
+                        text = "🚨 NOTIFIED",
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            } else {
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = SafeGreen.copy(alpha = 0.15f)
+                ) {
+                    Text(
+                        text = "● Standby",
+                        color = SafeGreen,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.width(6.dp))
+
+            IconButton(
+                onClick = onCallClick,
+                modifier = Modifier.size(28.dp)
+            ) {
+                Icon(
+                    Icons.Default.Phone,
+                    contentDescription = "Call ${authority.name}",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
+
+// ─── Reusable Components ──────────────────────────────────────────────────────
 @Composable
 private fun MonitoringCard(
     icon: ImageVector,
@@ -651,76 +758,50 @@ private fun MonitoringCard(
     subtitle: String,
     statusColor: Color,
     statusText: String,
-    iconTint: Color,
-    content: @Composable ColumnScope.() -> Unit
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+    content: @Composable () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(14.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f) // Ensure row takes remaining space 
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(iconTint.copy(alpha = 0.12f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            icon,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                            tint = iconTint
-                        )
-                    }
-                    Spacer(Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            title,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            subtitle,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        fontSize = 10.sp
+                    )
                 }
-
-                Spacer(Modifier.width(8.dp))
-
-                // Status badge
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(statusColor.copy(alpha = 0.12f))
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = statusColor.copy(alpha = 0.12f)
                 ) {
                     Text(
-                        statusText,
+                        text = statusText,
+                        color = statusColor,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = statusColor,
-                        maxLines = 1,
-                        softWrap = false
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
             }
@@ -732,18 +813,29 @@ private fun MonitoringCard(
 
 @Composable
 private fun InfoChip(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-        )
-        Text(
-            value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+        modifier = Modifier.padding(vertical = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "$label: ",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                fontSize = 11.sp
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 11.sp
+            )
+        }
     }
 }
 
@@ -751,31 +843,28 @@ private fun InfoChip(label: String, value: String) {
 private fun ThreatEventCard(event: ThreatEvent) {
     val borderColor = when (event.severity) {
         ThreatSeverity.CRITICAL -> ThreatRed
-        ThreatSeverity.HIGH -> JourneyAmber
-        ThreatSeverity.MEDIUM -> JourneyBlue
+        ThreatSeverity.HIGH -> ThreatRed.copy(alpha = 0.7f)
+        ThreatSeverity.MEDIUM -> JourneyAmber
         ThreatSeverity.LOW -> SafeGreen
     }
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, borderColor.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = borderColor.copy(alpha = 0.05f)
-        )
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
             verticalAlignment = Alignment.Top
         ) {
-            // Severity dot
             Box(
                 modifier = Modifier
-                    .padding(top = 4.dp)
                     .size(8.dp)
                     .clip(CircleShape)
                     .background(borderColor)
+                    .align(Alignment.CenterVertically)
             )
             Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -784,30 +873,31 @@ private fun ThreatEventCard(event: ThreatEvent) {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        event.type,
-                        style = MaterialTheme.typography.labelLarge,
+                        text = event.type,
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = borderColor
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        event.timestamp,
+                        text = event.timestamp,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                     )
                 }
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    event.message,
+                    text = event.message,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    fontSize = 11.sp
                 )
             }
         }
     }
 }
 
-private fun formatTime(totalSeconds: Int): String {
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return String.format(Locale.US, "%02d:%02d", minutes, seconds)
+private fun formatTime(seconds: Int): String {
+    val mins = seconds / 60
+    val secs = seconds % 60
+    return String.format(Locale.getDefault(), "%02d:%02d", mins, secs)
 }

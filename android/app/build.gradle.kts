@@ -63,6 +63,9 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        jniLibs {
+            pickFirsts += "lib/**/libc++_shared.so"
+        }
     }
 }
 
@@ -148,6 +151,9 @@ dependencies {
 
     // Google Generative AI (Gemini)
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
+
+    // Vosk - Offline Speech Recognition for keyword detection
+    implementation("com.alphacephei:vosk-android:0.3.47")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

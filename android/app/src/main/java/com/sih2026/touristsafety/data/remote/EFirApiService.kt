@@ -16,7 +16,15 @@ data class StructuredFir(
     val propertyLost: String,
     val witnesses: String,
     val narrative: String,
-    val complainantDetails: String
+    val complainantDetails: String,
+    val firNumber: String = "",
+    val policeStation: String = "",
+    val district: String = "",
+    val state: String = "Delhi",
+    val distanceFromPs: String = "",
+    val formalComplaintLetter: String = "",
+    val digitalHash: String = "",
+    val qrCodeBase64: String = ""
 )
 
 

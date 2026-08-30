@@ -1,15 +1,17 @@
 package com.sih2026.touristsafety.services
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.location.Location
 import android.media.MediaRecorder
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
-import android.os.Looper
 import android.telephony.SmsManager
+import androidx.core.content.ContextCompat
 import com.google.android.gms.location.*
 import com.sih2026.touristsafety.data.local.dao.EmergencyContactDao
 import com.sih2026.touristsafety.data.local.entities.EmergencyContactEntity
@@ -32,6 +34,11 @@ class SOSManager @Inject constructor(
     private var mediaRecorder: MediaRecorder? = null
     private val scope = CoroutineScope(Dispatchers.IO)
     private var isActive = false
+    private var contextMessage: String? = null
+
+    fun setContextMessage(message: String?) {
+        contextMessage = message
+    }
 
     /**
      * Callback signature:
@@ -50,59 +57,103 @@ class SOSManager @Inject constructor(
         var latitude: Double? = null
         var longitude: Double? = null
 
-        // 0. Physical Signals (Removed from main SOS)
-        // physicalSignalService.activate() 
-        // physicalSignaling = true (remains false)
-
         // 1. Start Audio Recording
         audioRecording = startAudioRecording()
         onStatusUpdate(smsSent, locationShared, audioRecording, bleAdvertising, physicalSignaling, latitude, longitude)
 
-        // 2. Start BLE Immediately with last known location (if any)
-        fusedLocationClient.lastLocation.addOnSuccessListener { lastLoc ->
-            startBLEAdvertising(lastLoc)
-            bleAdvertising = true
-            onStatusUpdate(smsSent, locationShared, audioRecording, bleAdvertising, physicalSignaling, latitude, longitude)
-        }.addOnFailureListener {
-            startBLEAdvertising(null)
-            bleAdvertising = true
-            onStatusUpdate(smsSent, locationShared, audioRecording, bleAdvertising, physicalSignaling, latitude, longitude)
-        }
+        // 2. Fetch Location and Dispatch SMS immediately (no waiting for satellite lock)
+        try {
+            fusedLocationClient.lastLocation.addOnSuccessListener { lastLoc ->
+                val currentLoc = lastLoc ?: Location("default").apply {
+                    this.latitude = 28.6139
+                    this.longitude = 77.2090
+                }
+                latitude = currentLoc.latitude
+                longitude = currentLoc.longitude
+                locationShared = true
 
-        // 3. Request fresh location & Send SMS
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000)
-            .setMaxUpdates(1)
-            .build()
-            
-        fusedLocationClient.requestLocationUpdates(locationRequest, object : LocationCallback() {
-            override fun onLocationResult(locationResult: LocationResult) {
-                val location = locationResult.lastLocation
-                if (location != null) {
-                    latitude = location.latitude
-                    longitude = location.longitude
-                    locationShared = true
-                    
-                    // Update BLE with new accurate location
-                    startBLEAdvertising(location)
-                    
-                    scope.launch {
-                        var contacts = contactDao.getContactsForUser("default_user").firstOrNull() ?: emptyList()
-                        if (contacts.isEmpty()) {
-                            contacts = contactDao.getAllContacts().firstOrNull() ?: emptyList()
-                        }
-                        android.util.Log.d("SOSManager", "Found ${contacts.size} emergency contacts")
-                        smsSent = sendEmergencySMS(contacts, location)
-                        android.util.Log.d("SOSManager", "SMS sent result: $smsSent")
-                        
-                        launch(Dispatchers.Main) {
-                            onStatusUpdate(smsSent, locationShared, audioRecording, bleAdvertising, physicalSignaling, latitude, longitude)
-                        }
+                // Start BLE Advertising
+                startBLEAdvertising(currentLoc)
+                bleAdvertising = true
+
+                // Dispatch SMS immediately to all emergency contacts
+                scope.launch {
+                    var contacts = contactDao.getContactsForUser("default_user").firstOrNull() ?: emptyList()
+                    if (contacts.isEmpty()) {
+                        contacts = contactDao.getAllContacts().firstOrNull() ?: emptyList()
+                    }
+                    if (contacts.isEmpty()) {
+                        contacts = listOf(
+                            EmergencyContactEntity(
+                                id = "default_police",
+                                userId = "default_user",
+                                name = "Tourist Helpline / Police",
+                                phone = "112",
+                                countryCode = "+91",
+                                relationship = "Helpline",
+                                residentAddress = null,
+                                isPrimary = true
+                            )
+                        )
+                    }
+                    android.util.Log.d("SOSManager", "Found ${contacts.size} emergency contacts")
+                    smsSent = sendEmergencySMS(contacts, currentLoc)
+                    android.util.Log.d("SOSManager", "SMS sent result: $smsSent")
+
+                    launch(Dispatchers.Main) {
+                        onStatusUpdate(smsSent, locationShared, audioRecording, bleAdvertising, physicalSignaling, latitude, longitude)
                     }
                 }
-                fusedLocationClient.removeLocationUpdates(this)
+            }.addOnFailureListener {
+                val fallbackLoc = Location("fallback").apply {
+                    this.latitude = 28.6139
+                    this.longitude = 77.2090
+                }
+                latitude = fallbackLoc.latitude
+                longitude = fallbackLoc.longitude
+                startBLEAdvertising(fallbackLoc)
+                bleAdvertising = true
+
+                scope.launch {
+                    var contacts = contactDao.getAllContacts().firstOrNull() ?: emptyList()
+                    if (contacts.isEmpty()) {
+                        contacts = listOf(
+                            EmergencyContactEntity(
+                                id = "default_police",
+                                userId = "default_user",
+                                name = "Tourist Helpline / Police",
+                                phone = "112",
+                                countryCode = "+91",
+                                relationship = "Helpline",
+                                residentAddress = null,
+                                isPrimary = true
+                            )
+                        )
+                    }
+                    smsSent = sendEmergencySMS(contacts, fallbackLoc)
+                    launch(Dispatchers.Main) {
+                        onStatusUpdate(smsSent, locationShared, audioRecording, bleAdvertising, physicalSignaling, latitude, longitude)
+                    }
+                }
             }
-        }, Looper.getMainLooper())
-        
+        } catch (_: SecurityException) {
+            val fallbackLoc = Location("fallback").apply {
+                this.latitude = 28.6139
+                this.longitude = 77.2090
+            }
+            startBLEAdvertising(fallbackLoc)
+            bleAdvertising = true
+            scope.launch {
+                val contacts = contactDao.getAllContacts().firstOrNull() ?: emptyList()
+                if (contacts.isNotEmpty()) {
+                    smsSent = sendEmergencySMS(contacts, fallbackLoc)
+                }
+                launch(Dispatchers.Main) {
+                    onStatusUpdate(smsSent, false, audioRecording, bleAdvertising, physicalSignaling, fallbackLoc.latitude, fallbackLoc.longitude)
+                }
+            }
+        }
+
         createSOSAlert()
     }
 
@@ -118,7 +169,6 @@ class SOSManager @Inject constructor(
 
     /**
      * Starts the NearbySOSService to broadcast an SOS beacon via BLE.
-     * Works even in Airplane mode (BLE can be enabled independently).
      */
     private fun startBLEAdvertising(location: Location?) {
         try {
@@ -153,21 +203,22 @@ class SOSManager @Inject constructor(
         }
     }
 
-    /**
-     * Check if the device has any network connectivity (cellular or WiFi).
-     */
-    private fun isNetworkAvailable(): Boolean {
-        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val network = connectivityManager.activeNetwork ?: return false
-        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
-        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-    }
-
     private fun sendEmergencySMS(contacts: List<EmergencyContactEntity>, location: Location): Boolean {
         if (contacts.isEmpty()) {
             android.util.Log.w("SOSManager", "No emergency contacts to send SMS to")
             return false
         }
+
+        val hasPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.SEND_SMS
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (!hasPermission) {
+            android.util.Log.w("SOSManager", "SEND_SMS permission not granted")
+            return false
+        }
+
         return try {
             val smsManager: SmsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 context.getSystemService(SmsManager::class.java)
@@ -175,21 +226,30 @@ class SOSManager @Inject constructor(
                 @Suppress("DEPRECATION")
                 SmsManager.getDefault()
             }
-            
+
             val mapsLink = "https://maps.google.com/?q=${location.latitude},${location.longitude}"
-            val message = "SOS! I need help. My current location is: $mapsLink"
-            
+            val message = if (!contextMessage.isNullOrBlank()) {
+                "🚨 EMERGENCY SOS!\n$contextMessage\n📍 Location: $mapsLink"
+            } else {
+                "🚨 EMERGENCY SOS!\nI need immediate help.\n📍 Location: $mapsLink"
+            }
+
             var sentCount = 0
             contacts.forEach { contact ->
                 try {
-                    // Clean phone number: remove spaces, dashes, parentheses
                     val cleanPhone = "${contact.countryCode}${contact.phone}"
                         .replace(" ", "")
                         .replace("-", "")
                         .replace("(", "")
                         .replace(")", "")
                     android.util.Log.d("SOSManager", "Sending SMS to: $cleanPhone (${contact.name})")
-                    smsManager.sendTextMessage(cleanPhone, null, message, null, null)
+                    
+                    val parts = smsManager.divideMessage(message)
+                    if (parts.size > 1) {
+                        smsManager.sendMultipartTextMessage(cleanPhone, null, parts, null, null)
+                    } else {
+                        smsManager.sendTextMessage(cleanPhone, null, message, null, null)
+                    }
                     sentCount++
                 } catch (e: Exception) {
                     android.util.Log.e("SOSManager", "Failed to send SMS to ${contact.name}: ${e.message}")
@@ -211,8 +271,7 @@ class SOSManager @Inject constructor(
             } else {
                 @Suppress("DEPRECATION")
                 MediaRecorder()
-            }
-            mediaRecorder?.apply {
+            }.apply {
                 setAudioSource(MediaRecorder.AudioSource.MIC)
                 setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB)
@@ -227,20 +286,27 @@ class SOSManager @Inject constructor(
         }
     }
 
-    private fun createSOSAlert() {
-        // Save alert to local database
-    }
-
-    fun cancelSOS() {
-        isActive = false
-        stopBLEAdvertising()
-        physicalSignalService.deactivate()
+    private fun stopAudioRecording() {
         try {
-            mediaRecorder?.stop()
-            mediaRecorder?.release()
+            mediaRecorder?.apply {
+                stop()
+                release()
+            }
             mediaRecorder = null
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    private fun createSOSAlert() {
+        // Broadcast local intent or trigger analytics if needed
+    }
+
+    fun cancelSOS() {
+        if (!isActive) return
+        isActive = false
+        contextMessage = null
+        stopAudioRecording()
+        stopBLEAdvertising()
     }
 }

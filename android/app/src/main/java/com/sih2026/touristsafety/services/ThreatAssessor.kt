@@ -8,23 +8,46 @@ data class ThreatAssessment(
     val score: Int,
     val level: ThreatLevel,
     val shouldTriggerSOS: Boolean,
-    val shouldPromptCheckIn: Boolean
+    val shouldPromptCheckIn: Boolean,
+    val triggerReason: String = ""
 )
 
 object ThreatAssessor {
     fun assessThreat(
-        screamDetected: Boolean, 
-        gender: String, 
-        distressLevel: Float, 
-        isNight: Boolean, 
-        isDangerZone: Boolean
+        screamDetected: Boolean,
+        gender: String,
+        distressLevel: Float,
+        isNight: Boolean,
+        isDangerZone: Boolean,
+        keywordAlertTriggered: Boolean
     ): ThreatAssessment {
         var score = 0
-        if (screamDetected) score += 40
-        if (gender == "female") score += 20
-        if (distressLevel > 0.5f) score += 25
-        if (isNight) score += 10
-        if (isDangerZone) score += 15
+        val reasons = mutableListOf<String>()
+
+        if (keywordAlertTriggered) {
+            score += 50
+            reasons.add("Keyword Alert")
+        }
+        if (screamDetected) {
+            score += 40
+            reasons.add("Scream Detected")
+        }
+        if (gender.equals("female", ignoreCase = true)) {
+            score += 20
+            reasons.add("Female Safety Factor")
+        }
+        if (distressLevel > 0.5f) {
+            score += 25
+            reasons.add("High Distress")
+        }
+        if (isNight) {
+            score += 10
+            reasons.add("Night")
+        }
+        if (isDangerZone) {
+            score += 15
+            reasons.add("Danger Zone")
+        }
 
         val level = when {
             score >= 60 -> ThreatLevel.CRITICAL
@@ -33,11 +56,31 @@ object ThreatAssessor {
             else -> ThreatLevel.LOW
         }
 
+        val triggerReason = if (reasons.isEmpty()) "None" else reasons.joinToString(" + ")
+
         return ThreatAssessment(
             score = score,
             level = level,
             shouldTriggerSOS = score >= 60,
-            shouldPromptCheckIn = score >= 40 && score < 60
+            shouldPromptCheckIn = score >= 40 && score < 60,
+            triggerReason = triggerReason
+        )
+    }
+
+    fun assessThreat(
+        screamDetected: Boolean,
+        gender: String,
+        distressLevel: Float,
+        isNight: Boolean,
+        isDangerZone: Boolean
+    ): ThreatAssessment {
+        return assessThreat(
+            screamDetected = screamDetected,
+            gender = gender,
+            distressLevel = distressLevel,
+            isNight = isNight,
+            isDangerZone = isDangerZone,
+            keywordAlertTriggered = false
         )
     }
 }

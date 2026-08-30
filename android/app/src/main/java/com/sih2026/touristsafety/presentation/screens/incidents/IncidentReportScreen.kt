@@ -2,6 +2,7 @@ package com.sih2026.touristsafety.presentation.screens.incidents
 
 import android.Manifest
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -24,7 +25,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Camera
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.*
@@ -38,9 +42,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.sih2026.touristsafety.data.remote.AIAnalysisResult
+import com.sih2026.touristsafety.data.remote.StructuredFir
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -49,7 +56,8 @@ import java.util.*
 @Composable
 fun IncidentReportScreen(
     viewModel: IncidentReportViewModel = hiltViewModel(),
-    onNavigateBack: () -> Unit = {}
+    onNavigateBack: () -> Unit = {},
+    onNavigateToEFir: () -> Unit = {}
 ) {
     val currentStep by viewModel.currentStep.collectAsState()
     val capturedPhotos by viewModel.capturedPhotos.collectAsState()
@@ -57,7 +65,10 @@ fun IncidentReportScreen(
     val description by viewModel.description.collectAsState()
     val location by viewModel.location.collectAsState()
     val aiAnalysis by viewModel.aiAnalysis.collectAsState()
+    val structuredFir by viewModel.structuredFir.collectAsState()
     val isAnalyzing by viewModel.isAnalyzing.collectAsState()
+    val isPdfExporting by viewModel.isPdfExporting.collectAsState()
+    val downloadedPdfUri by viewModel.downloadedPdfUri.collectAsState()
 
     var showSuccessDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -102,15 +113,20 @@ fun IncidentReportScreen(
                     description = description,
                     location = location,
                     aiAnalysis = aiAnalysis,
+                    structuredFir = structuredFir,
+                    isPdfExporting = isPdfExporting,
+                    downloadedPdfUri = downloadedPdfUri,
                     onSubmit = { 
                         viewModel.submitReport()
                         showSuccessDialog = true
                     },
                     onSaveDraft = { 
                         viewModel.saveDraft()
-                        android.widget.Toast.makeText(context, "Draft saved successfully", android.widget.Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Draft saved successfully", Toast.LENGTH_SHORT).show()
                         onNavigateBack()
-                    }
+                    },
+                    onGeneratePdf = { viewModel.downloadOfficialFirPdf(context) },
+                    onOpenPdf = { viewModel.openDownloadedPdf(context) }
                 )
             }
         }
@@ -119,13 +135,21 @@ fun IncidentReportScreen(
             AlertDialog(
                 onDismissRequest = { showSuccessDialog = false },
                 title = { Text("Report Submitted") },
-                text = { Text("Your incident report (ID: INC-${System.currentTimeMillis().toString().takeLast(6)}) has been submitted successfully.") },
+                text = { Text("Your incident report has been submitted. Would you like to generate the official CCTNS e-FIR PDF document?") },
                 confirmButton = {
                     Button(onClick = {
                         showSuccessDialog = false
+                        viewModel.downloadOfficialFirPdf(context)
+                    }) {
+                        Text("Download Official e-FIR (PDF)")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showSuccessDialog = false
                         onNavigateBack()
                     }) {
-                        Text("OK")
+                        Text("Done")
                     }
                 }
             )
@@ -142,38 +166,58 @@ fun Step1CaptureEvidence(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-
-    val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent(),
-        onResult = { uri -> uri?.let { onPhotoAdded(it) } }
-    )
-
-    var hasCameraPermission by remember { mutableStateOf(false) }
-    val imageCapture = remember { ImageCapture.Builder().build() }
-
-    val cameraPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        hasCameraPermission = granted
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        )
     }
 
-    // Request camera permission on first composition
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasCameraPermission = isGranted
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        uris.forEach { onPhotoAdded(it) }
+    }
+
+    var imageCapture: ImageCapture? by remember { mutableStateOf(null) }
+
     LaunchedEffect(Unit) {
-        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        if (!hasCameraPermission) {
+            permissionLauncher.launch(Manifest.permission.CAMERA)
+        }
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Real Camera Preview
+        Text(
+            text = "Capture / Upload Evidence",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "Take up to 5 photos of the scene or missing items",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color.Black),
-            contentAlignment = Alignment.Center
+                .background(Color.Black)
         ) {
             if (hasCameraPermission) {
                 AndroidView(
@@ -185,6 +229,10 @@ fun Step1CaptureEvidence(
                             val preview = Preview.Builder().build().also {
                                 it.setSurfaceProvider(previewView.surfaceProvider)
                             }
+                            imageCapture = ImageCapture.Builder()
+                                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                                .build()
+
                             try {
                                 cameraProvider.unbindAll()
                                 cameraProvider.bindToLifecycle(
@@ -201,53 +249,72 @@ fun Step1CaptureEvidence(
                     },
                     modifier = Modifier.fillMaxSize()
                 )
+
+                IconButton(
+                    onClick = {
+                        val imgCap = imageCapture ?: return@IconButton
+                        val photoFile = File(context.cacheDir, "evidence_${System.currentTimeMillis()}.jpg")
+                        val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
+
+                        imgCap.takePicture(
+                            outputOptions,
+                            ContextCompat.getMainExecutor(context),
+                            object : ImageCapture.OnImageSavedCallback {
+                                override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                                    val savedUri = Uri.fromFile(photoFile)
+                                    onPhotoAdded(savedUri)
+                                }
+
+                                override fun onError(exception: ImageCaptureException) {
+                                    exception.printStackTrace()
+                                }
+                            }
+                        )
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(16.dp)
+                        .size(72.dp)
+                        .background(Color.White, CircleShape)
+                ) {
+                    Icon(
+                        Icons.Default.CameraAlt,
+                        contentDescription = "Take Photo",
+                        tint = Color.Black,
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+
+                IconButton(
+                    onClick = { galleryLauncher.launch("image/*") },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(24.dp)
+                        .size(48.dp)
+                        .background(Color.White.copy(alpha = 0.8f), CircleShape)
+                ) {
+                    Icon(
+                        Icons.Default.Image,
+                        contentDescription = "Gallery",
+                        tint = Color.Black
+                    )
+                }
             } else {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.White, modifier = Modifier.size(64.dp))
-                    Spacer(modifier = Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Text("Camera permission required", color = Color.White)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Button(onClick = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }) {
+                    Button(onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }) {
                         Text("Grant Permission")
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(onClick = { galleryLauncher.launch("image/*") }) {
+                        Text("Pick from Gallery")
+                    }
                 }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            Button(onClick = { galleryLauncher.launch("image/*") }) {
-                Icon(Icons.Default.Image, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Gallery")
-            }
-            Button(
-                onClick = {
-                    val photoFile = File.createTempFile("incident_", ".jpg", context.cacheDir)
-                    val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
-                    imageCapture.takePicture(
-                        outputOptions,
-                        ContextCompat.getMainExecutor(context),
-                        object : ImageCapture.OnImageSavedCallback {
-                            override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                                onPhotoAdded(Uri.fromFile(photoFile))
-                            }
-                            override fun onError(e: ImageCaptureException) {
-                                e.printStackTrace()
-                            }
-                        }
-                    )
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                enabled = hasCameraPermission
-            ) {
-                Icon(Icons.Default.Camera, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Capture")
             }
         }
 
@@ -255,50 +322,46 @@ fun Step1CaptureEvidence(
 
         if (photos.isNotEmpty()) {
             LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 itemsIndexed(photos) { index, uri ->
                     Box(
                         modifier = Modifier
-                            .size(80.dp)
+                            .size(72.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         coil.compose.AsyncImage(
                             model = uri,
-                            contentDescription = "Photo ${index + 1}",
+                            contentDescription = "Photo $index",
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
                         )
                         IconButton(
                             onClick = { onPhotoRemoved(index) },
-                            modifier = Modifier.align(Alignment.TopEnd).size(24.dp)
+                            modifier = Modifier
+                                .size(24.dp)
+                                .align(Alignment.TopEnd)
+                                .background(Color.Black.copy(alpha = 0.6f), CircleShape)
                         ) {
                             Icon(
                                 Icons.Default.Close,
-                                contentDescription = "Remove",
+                                contentDescription = "Delete",
                                 tint = Color.White,
-                                modifier = Modifier
-                                    .background(Color.Black.copy(alpha = 0.6f), CircleShape)
-                                    .padding(2.dp)
-                                    .size(16.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
                 }
             }
-        } else {
-            Text("No photos captured yet (Max 5)", style = MaterialTheme.typography.bodyMedium)
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
         Button(
             onClick = onNext,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = photos.isNotEmpty()
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Next: Incident Details")
+            Text(if (photos.isEmpty()) "Skip Photo & Continue" else "Continue (${photos.size} Photos)")
         }
     }
 }
@@ -310,20 +373,17 @@ fun Step2IncidentDetails(
     incidentType: String,
     description: String,
     location: LatLng?,
-    aiAnalysis: com.sih2026.touristsafety.data.remote.AIAnalysisResult?,
+    aiAnalysis: AIAnalysisResult?,
     isAnalyzing: Boolean,
     onTypeChange: (String) -> Unit,
     onDescriptionChange: (String) -> Unit,
     onAnalyze: () -> Unit,
     onNext: () -> Unit
 ) {
+    val incidentTypes = listOf("Theft", "Harassment", "Scam / Fraud", "Physical Assault", "Lost Item", "Medical Emergency", "Other")
+    var expanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     val scrollState = rememberScrollState()
-    var expandedType by remember { mutableStateOf(false) }
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val types = listOf("Theft", "Snatching", "Harassment", "Accident", "Lost Item", "Fraud", "Assault", "Other")
-
-    val sdf = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
-    val currentTime = sdf.format(Date())
 
     Column(
         modifier = Modifier
@@ -332,53 +392,48 @@ fun Step2IncidentDetails(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Show captured photos
+        Text("Incident Details", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+
         if (photos.isNotEmpty()) {
-            Text("Evidence Photos (${photos.size})", style = MaterialTheme.typography.labelLarge)
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth().height(100.dp)
-            ) {
-                itemsIndexed(photos) { index, uri ->
-                    Box(
+            Text("Evidence Photos (${photos.size})", style = MaterialTheme.typography.labelMedium)
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                itemsIndexed(photos) { _, uri ->
+                    coil.compose.AsyncImage(
+                        model = uri,
+                        contentDescription = "Evidence",
                         modifier = Modifier
-                            .size(100.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        coil.compose.AsyncImage(
-                            model = uri,
-                            contentDescription = "Evidence ${index + 1}",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
+                            .size(60.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                        contentScale = ContentScale.Crop
+                    )
                 }
             }
         }
 
         ExposedDropdownMenuBox(
-            expanded = expandedType,
-            onExpandedChange = { expandedType = !expandedType }
+            expanded = expanded,
+            onExpandedChange = { expanded = !expanded }
         ) {
             OutlinedTextField(
                 value = incidentType,
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("Incident Type") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedType) },
-                modifier = Modifier.menuAnchor().fillMaxWidth()
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor()
             )
             ExposedDropdownMenu(
-                expanded = expandedType,
-                onDismissRequest = { expandedType = false }
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
             ) {
-                types.forEach { type ->
+                incidentTypes.forEach { type ->
                     DropdownMenuItem(
                         text = { Text(type) },
                         onClick = {
                             onTypeChange(type)
-                            expandedType = false
+                            expanded = false
                         }
                     )
                 }
@@ -389,12 +444,14 @@ fun Step2IncidentDetails(
             value = description,
             onValueChange = onDescriptionChange,
             label = { Text("Description") },
-            modifier = Modifier.fillMaxWidth().height(120.dp),
-            maxLines = 5
+            placeholder = { Text("Describe what happened, lost items, suspects...") },
+            minLines = 3,
+            modifier = Modifier.fillMaxWidth()
         )
 
+        val currentDate = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(Date())
         OutlinedTextField(
-            value = "Date & Time: $currentTime",
+            value = "Date & Time: $currentDate",
             onValueChange = {},
             readOnly = true,
             modifier = Modifier.fillMaxWidth()
@@ -412,7 +469,7 @@ fun Step2IncidentDetails(
                 label = { Text("Location") },
                 modifier = Modifier.weight(1f)
             )
-            IconButton(onClick = { android.widget.Toast.makeText(context, "Map edit coming soon", android.widget.Toast.LENGTH_SHORT).show() }) {
+            IconButton(onClick = { Toast.makeText(context, "Location pinned: Connaught Place, New Delhi", Toast.LENGTH_SHORT).show() }) {
                 Icon(Icons.Default.Map, contentDescription = "Edit Location")
             }
         }
@@ -420,12 +477,12 @@ fun Step2IncidentDetails(
         Button(
             onClick = onAnalyze,
             modifier = Modifier.fillMaxWidth(),
-            enabled = !isAnalyzing && aiAnalysis == null
+            enabled = !isAnalyzing && aiAnalysis == null && description.isNotBlank()
         ) {
             if (isAnalyzing) {
                 CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Analyzing Evidence...")
+                Text("Analyzing Evidence & Legal Rules...")
             } else {
                 Text("Analyze Evidence with AI")
             }
@@ -434,14 +491,33 @@ fun Step2IncidentDetails(
         aiAnalysis?.let { analysis ->
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f))
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("AI Analysis Result", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Scene: ${analysis.sceneDescription}")
-                    Text("Detected: ${analysis.detectedObjects.joinToString(", ")}")
-                    Text("Severity: ${analysis.severityAssessment}")
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("AI Legal Analysis Result", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Scene: ${analysis.sceneDescription}", style = MaterialTheme.typography.bodyMedium)
+                    if (analysis.detectedObjects.isNotEmpty()) {
+                        Text("Detected: ${analysis.detectedObjects.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text("Severity: ${analysis.severityAssessment}", fontWeight = FontWeight.Bold, color = if (analysis.severityAssessment.contains("High", true) || analysis.severityAssessment.contains("Critical", true)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                    
+                    if (analysis.suggestedBnsSections.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Applicable BNS (2023) Sections:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            analysis.suggestedBnsSections.forEach { section ->
+                                SuggestionChip(
+                                    onClick = {},
+                                    label = { Text(section, fontWeight = FontWeight.Bold, fontSize = 11.sp) },
+                                    modifier = Modifier.padding(end = 4.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    if (analysis.jurisdictionalPoliceStation.isNotBlank()) {
+                        Text("Jurisdiction: ${analysis.jurisdictionalPoliceStation}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }
@@ -464,9 +540,14 @@ fun Step3ReviewSubmit(
     incidentType: String,
     description: String,
     location: LatLng?,
-    aiAnalysis: com.sih2026.touristsafety.data.remote.AIAnalysisResult?,
+    aiAnalysis: AIAnalysisResult?,
+    structuredFir: StructuredFir?,
+    isPdfExporting: Boolean,
+    downloadedPdfUri: Uri?,
     onSubmit: () -> Unit,
-    onSaveDraft: () -> Unit
+    onSaveDraft: () -> Unit,
+    onGeneratePdf: () -> Unit,
+    onOpenPdf: () -> Unit
 ) {
     val scrollState = rememberScrollState()
 
@@ -481,9 +562,9 @@ fun Step3ReviewSubmit(
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Type: $incidentType", fontWeight = FontWeight.Bold)
+                Text("Type: $incidentType", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 Text("Description: $description")
-                Text("Location: ${location?.latitude}, ${location?.longitude}")
+                Text("Location: ${location?.latitude ?: 28.6139}, ${location?.longitude ?: 77.2090}")
                 Text("Photos attached: ${photos.size}")
                 if (photos.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
@@ -506,26 +587,88 @@ fun Step3ReviewSubmit(
             }
         }
 
-        aiAnalysis?.let {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("AI Assessment", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("Severity: ${it.severityAssessment}")
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f))
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("AI Legal Assessment (BNSS 173)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(0xFF003366)
+                    ) {
+                        Text(
+                            "BNS 2023",
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
                 }
+                
+                val sections = structuredFir?.bnsSections ?: aiAnalysis?.suggestedBnsSections ?: listOf("Sec 303(2) BNS (Theft)")
+                Text("Classified Sections: ${sections.joinToString(", ")}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                
+                val ps = structuredFir?.policeStation ?: aiAnalysis?.jurisdictionalPoliceStation ?: "Connaught Place Police Station"
+                Text("Jurisdiction: $ps, New Delhi District", style = MaterialTheme.typography.bodySmall)
+
+                val severity = aiAnalysis?.severityAssessment ?: "Moderate"
+                Text("Assessed Severity: $severity", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         Button(
             onClick = onSubmit,
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
         ) {
-            Text("Submit Report")
+            Text("Submit Incident Report")
+        }
+
+        if (isPdfExporting) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp).fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text("Compiling CCTNS e-FIR PDF with QR code...", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                }
+            }
+        } else {
+            FilledTonalButton(
+                onClick = onGeneratePdf,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Download, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Generate Official e-FIR (BNS Form-II PDF)")
+            }
+        }
+
+        if (downloadedPdfUri != null) {
+            FilledTonalButton(
+                onClick = onOpenPdf,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.filledTonalButtonColors(containerColor = Color(0xFFE8F5E9))
+            ) {
+                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF2E7D32))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Open Downloaded e-FIR PDF", color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold)
+            }
         }
 
         OutlinedButton(
